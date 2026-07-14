@@ -1,0 +1,160 @@
+---
+- name: Update system packages (pacman)
+  community.general.pacman:
+    update_cache: true
+    upgrade: true
+  become: true
+
+- name: Reduce bootloader menu timeout to 0 seconds
+  ansible.builtin.replace:
+    path: /boot/loader/loader.conf
+    regexp: '^timeout\s+\d+'
+    replace: 'timeout 0'
+  register: timeout_update
+  failed_when: false
+
+- name: Fallback to alternate EFI path if /boot/loader/loader.conf wasn't found
+  ansible.builtin.replace:
+    path: /efi/loader/loader.conf
+    regexp: '^timeout\s+\d+'
+    replace: 'timeout 0'
+  when: timeout_update.failed or (timeout_update.msg is defined and "Could not find" in timeout_update.msg)
+
+- name: Install essential system and CLI tools
+  ansible.builtin.package:
+    name:
+      - ufw
+      - git
+      - base-devel
+      - fastfetch
+      - btop
+      - ripgrep
+      - fd
+      - tmux
+      - brightnessctl
+      - power-profiles-daemon # powerprofilesctl
+      - yay
+      - scx-scheds
+      - ristretto
+      - okular
+      - bluetui
+      - tree
+    state: present
+
+- name: Create the `aur_builder` user
+  become: true
+  ansible.builtin.user:
+    name: aur_builder
+    create_home: true
+    group: wheel
+
+- name: Allow the `aur_builder` user to run `sudo pacman` without a password
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/11-install-aur_builder
+    line: 'aur_builder ALL=(ALL) NOPASSWD: /usr/bin/pacman'
+    create: true
+    mode: 0644
+    validate: 'visudo -cf %s'
+
+- name: Install AUR packages for system libraries
+  ansible.builtin.package:
+    name:
+      - gtk-layer-shell
+      - webkit2gtk-4.1
+      - dart-sass
+      - qt6ct
+    state: present
+  become: true
+
+- name: Install Astal libraries
+  kewlfft.aur.aur:
+    use: yay
+    name:
+      - nwg-look
+      - gnome-themes-extra
+    state: present
+  become: true
+  become_user: aur_builder
+
+- name: Enable UFW service on boot
+  ansible.builtin.systemd:
+    name: ufw
+    enabled: true
+    state: started
+
+- name: Configure UFW default policies
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Enable Network Time Synchronization (NTP)
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+
+- name: Ensure local icons directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['user_dir'] }}/.local/share/icons"
+    state: directory
+    mode: '0755'
+
+- name: Ensure local icons directory exists
+  ansible.builtin.file:
+    path: "/home/{{ ansible_facts['user_id'] }}/.local/share/icons"
+    state: directory
+    mode: '0755'
+
+- name: Download and extract Bibata cursor theme to system-wide directory
+  ansible.builtin.unarchive:
+    src: "https://github.com/ful1e5/Bibata_Cursor/releases/latest/download/Bibata-Modern-Classic.tar.xz"
+    dest: "/usr/share/icons/"
+    remote_src: true
+  become: true
+
+- name: Ensure default icon theme directory exists
+  ansible.builtin.file:
+    path: /usr/share/icons/default
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Configure system-wide default cursor theme
+  ansible.builtin.copy:
+    src: index.theme
+    dest: /usr/share/icons/default/index.theme
+    mode: '0644'
+  become: true
+
+- name: Apply dark theme for GTK apps
+  ansible.builtin.copy:
+    src: settings.ini
+    dest: "/home/{{ current_user }}/.config/gtk-3.0/settings.ini"
+    owner: "{{ current_user }}"
+    mode: '0644'
+
+- name: Set dark theme via gsettings
+  ansible.builtin.command:
+    cmd: "gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'"
+  become: false
+  become_user: "{{ current_user }}"
+
+
+# Scripts
+- name: Ensure local bin directory exists
+  ansible.builtin.file:
+    path: "/home/{{ current_user }}/.local/bin"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Background script
+  ansible.builtin.copy:
+    src: scripts/setbg.sh
+    dest: "/home/{{ current_user }}/.local/bin/setbg"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'

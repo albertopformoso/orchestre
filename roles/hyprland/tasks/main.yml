@@ -1,0 +1,67 @@
+---
+- name: Determine the non-root username running the script
+  ansible.builtin.set_fact:
+    current_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
+
+- name: Extract user home directory details
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ current_user }}"
+
+- name: Set target home path variable
+  ansible.builtin.set_fact:
+    user_home: "{{ ansible_facts['user_dir'] }}"
+
+- name: Install Hyprland and standard desktop dependencies
+  ansible.builtin.package:
+    name:
+      - hyprland
+      - kitty           # The default highly compatible GPU-accelerated terminal
+      - rofi-wayland    # Clean application launcher option
+      - swww            # High-performance animated wallpaper daemon
+      - wl-clipboard    # System clipboard integration for Wayland
+      - xorg-xwayland   # For legacy apps that don't support Wayland natively
+      - hyprpaper
+      - hyprlock
+      - hypridle
+      - hyprpolkitagent
+    state: present
+
+- name: Install Hypr AUR packages
+  kewlfft.aur.aur:
+    use: yay
+    name:
+      - hyprshot
+    state: present
+  become: true
+  become_user: aur_builder
+
+- name: Ensure target configuration directory exists
+  ansible.builtin.file:
+    path: "{{ user_home }}/.config/hypr"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Copy Hyprland configuration file to target destination physically
+  ansible.builtin.copy:
+    src: .
+    dest: "/home/{{ current_user }}/.config/hypr/"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+
+- name: Find all hyprlock scripts
+  ansible.builtin.find:
+    paths: "/home/{{ current_user }}/.config/hypr/hyprlock/scripts"
+    file_type: file
+  register: hyprlock_scripts
+
+- name: Make hyprlock scripts executable
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: '0755'
+  loop: "{{ hyprlock_scripts.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"

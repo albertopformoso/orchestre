@@ -1,0 +1,76 @@
+
+- name: Ensure local fonts directory exists
+  ansible.builtin.file:
+    path: "/home/{{ current_user }}/.local/share/fonts"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Install Nerd Fonts
+  become: true
+  community.general.pacman:
+    name:
+      - ttf-jetbrains-mono-nerd
+      - ttf-meslo-nerd
+      - ttf-nerd-fonts-symbols-mono
+    state: present
+
+- name: Set JetBrainsMono Nerd Font as default monospace system-wide
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/fonts/local.conf
+    content: |
+      <?xml version="1.0"?>
+      <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+      <fontconfig>
+        <!-- Fallback for Sans-Serif -->
+        <alias>
+          <family>sans-serif</family>
+          <prefer>
+            <family>JetBrainsMono Nerd Font</family>
+          </prefer>
+        </alias>
+        <!-- Fallback for Monospace -->
+        <alias>
+          <family>monospace</family>
+          <prefer>
+            <family>JetBrainsMono Nerd Font</family>
+          </prefer>
+        </alias>
+      </fontconfig>
+    mode: '0644'
+  notify: Refresh font cache
+
+- name: Create fonts directory for Google Sans Flex
+  become: true
+  ansible.builtin.file:
+    path: /usr/share/fonts/google-sans-flex-rounded
+    state: directory
+    mode: "0755"
+
+- name: Install Google Sans Flex Rounded font
+  become: true
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/tiwa244/Google-Sans-Rounded/main/{{ item }}"
+    dest: "/usr/share/fonts/google-sans-flex-rounded/{{ item }}"
+    mode: "0644"
+  loop:
+    - GoogleSansRounded-Thin.ttf
+    - GoogleSansRounded-ExtraLight.ttf
+    - GoogleSansRounded-Light.ttf
+    - GoogleSansRounded-Regular.ttf
+    - GoogleSansRounded-Medium.ttf
+    - GoogleSansRounded-Bold.ttf
+  notify: Refresh font cache
+
+- name: Set GTK3 font
+  ansible.builtin.lineinfile:
+    path: "/home/{{ current_user }}/.config/gtk-3.0/settings.ini"
+    create: true
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+    regexp: '^gtk-font-name='
+    line: 'gtk-font-name=JetBrainsMono Nerd Font 11'
+    insertafter: '\[Settings\]'

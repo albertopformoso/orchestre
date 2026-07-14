@@ -1,0 +1,38 @@
+---
+- name: Determine the non-root username running the script
+  ansible.builtin.set_fact:
+    current_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
+
+- name: Extract user home directory details
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ current_user }}"
+
+- name: Set target home path variable
+  ansible.builtin.set_fact:
+    user_home: "{{ ansible_facts['user_dir'] }}"
+
+- name: Ensure target configuration directory exists
+  ansible.builtin.file:
+    path: "{{ user_home }}/.vim/colors"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Copy Vim configuration file to target destination physically
+  ansible.builtin.copy:
+    src: ".vimrc"
+    dest: "/home/{{ current_user }}/"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+
+
+- name: Copy Vim themes files to target destination physically
+  ansible.builtin.copy:
+    src: "colors/"
+    dest: "/home/{{ current_user }}/.vim/colors/"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
