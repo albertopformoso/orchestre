@@ -1,0 +1,11 @@
+---
+- name: "Orchestre-OS: Local Machine Configuration"
+  hosts: local
+  become: true
+
+  roles:
+    - system
+    - fonts
+    - lockscreen
+    - vim
+    - hyprland
