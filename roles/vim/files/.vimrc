@@ -17,7 +17,7 @@ set showmatch
 set hlsearch
 
 " Theme
-colorschem tender
+colorscheme tender
 
 " Enable auto completion menu after pressing TAB.
 set wildmenu
