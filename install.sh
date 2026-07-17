@@ -34,6 +34,6 @@ fi
 echo -e "${RECOLOR}[*] Tuning the instruments... Running Ansible Playbook... ${NOCOLOR}"
 
 # --ask-become-pass prompts you for your sudo password so Ansible can install system packages
-ansible-playbook -i inventory.ini site.yml --ask-become-pass
+ansible-playbook -i inventory.ini site.yml --ask-become-pass -e "current_user=$USER"
 
 echo -e "${RECOLOR}=== Orchestre-OS: Configuration Complete! ===${NOCOLOR}"

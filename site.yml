@@ -6,6 +6,20 @@
   roles:
     - system
     - fonts
-    - lockscreen
+    - sddm
     - vim
     - hyprland
+
+  post_tasks:
+      - name: Clean up AUR builder user and configurations
+        block:
+          - name: Remove the sudoers drop-in file for `aur_builder`
+            ansible.builtin.file:
+              path: /etc/sudoers.d/11-install-aur_builder
+              state: absent
+
+          - name: Remove the `aur_builder` user and its home directory
+            ansible.builtin.user:
+              name: aur_builder
+              state: absent
+              remove: true
