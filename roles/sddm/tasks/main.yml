@@ -1,0 +1,64 @@
+---
+- name: Install prerequisites
+  ansible.builtin.package:
+    name:
+      - sddm
+      - qt6-declarative
+      - qt6-svg
+    state: present
+  become: true
+
+- name: Remove any previous Orchestre theme installation
+  ansible.builtin.file:
+    path: /usr/share/sddm/themes/orchestre
+    state: absent
+  become: true
+
+- name: Install Orchestre theme files
+  ansible.builtin.copy:
+    src: .
+    dest: /usr/share/sddm/themes/orchestre/
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Ensure /etc/sddm.conf.d exists
+  ansible.builtin.file:
+    path: /etc/sddm.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Set Orchestre as the active SDDM theme
+  ansible.builtin.copy:
+    dest: /etc/sddm.conf.d/theme.conf
+    content: |
+      [Theme]
+      Current=orchestre
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+- name: Allow current_user to run the SDDM background helper without a password
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/{{ item }}-sddm
+    content: "{{ current_user }} ALL=(root) NOPASSWD: /home/{{ current_user }}/.local/bin/{{ item }}\n"
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  loop:
+   - setbg
+   - setavatar
+  become: true
+
+- name: Enable and start SDDM
+  ansible.builtin.systemd:
+    name: sddm
+    state: started
+    enabled: true
+  become: true

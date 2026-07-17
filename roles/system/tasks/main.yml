@@ -153,8 +153,10 @@
 
 - name: Background script
   ansible.builtin.copy:
-    src: scripts/setbg.sh
-    dest: "/home/{{ current_user }}/.local/bin/setbg"
+    src: scripts/{{ item }}.sh
+    dest: "/home/{{ current_user }}/.local/bin/{{ item }}"
     owner: "{{ current_user }}"
     group: "{{ current_user }}"
     mode: '0755'
+  loop:
+    - setbg
