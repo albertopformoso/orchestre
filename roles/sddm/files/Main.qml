@@ -478,14 +478,15 @@ Rectangle {
                         Layout.preferredHeight: 40
                         echoMode: TextInput.Password
                         horizontalAlignment: Text.AlignHCenter
-                        font.pixelSize: 18
+                        font.pixelSize: 16
+                        font.letterSpacing: 4
                         color: container.textPrimary
                         focus: loginState.visible
                         enabled: !container.isLoggingIn
 
                         background: Rectangle {
                             color: parent.activeFocus ? container.glassFillHover : container.glassFill
-                            radius: 8
+                            radius: height / 2
                             border.width: 1
                             border.color: parent.activeFocus ? container.textPrimary : container.glassBorder
                             opacity: parent.enabled ? 1.0 : 0.5

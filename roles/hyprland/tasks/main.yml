@@ -1,4 +1,8 @@
 ---
+- name: Determine whether this host is an MSI machine
+  ansible.builtin.set_fact:
+    is_msi_device: "{{ 'micro-star' in (ansible_facts['system_vendor'] | default('') | lower) }}"
+
 - name: Determine the non-root username running the script
   ansible.builtin.set_fact:
     current_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
@@ -16,7 +20,6 @@
   ansible.builtin.package:
     name:
       - hyprland
-      - kitty           # The default highly compatible GPU-accelerated terminal
       - rofi-wayland    # Clean application launcher option
       - swww            # High-performance animated wallpaper daemon
       - wl-clipboard    # System clipboard integration for Wayland
@@ -48,6 +51,14 @@
   ansible.builtin.copy:
     src: .
     dest: "/home/{{ current_user }}/.config/hypr/"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+
+- name: Deploy hypridle.conf from template (adds MSI-only keyboard listener)
+  ansible.builtin.template:
+    src: hypridle.conf.j2
+    dest: "/home/{{ current_user }}/.config/hypr/hypridle.conf"
     owner: "{{ current_user }}"
     group: "{{ current_user }}"
     mode: '0644'

@@ -1,4 +1,8 @@
 ---
+- name: Determine whether this host is an MSI machine
+  ansible.builtin.set_fact:
+    is_msi_device: "{{ 'micro-star' in (ansible_facts['system_vendor'] | default('') | lower) }}"
+
 - name: Update system packages (pacman)
   community.general.pacman:
     update_cache: true
@@ -66,6 +70,22 @@
       - qt6ct
     state: present
   become: true
+
+- name: Remove leftover msi-ec config from a previous manual install (MSI laptops only)
+  ansible.builtin.file:
+    path: /etc/modules-load.d/msi-ec.conf
+    state: absent
+  become: true
+  when: is_msi_device
+
+- name: Install msi-ec kernel module (MSI laptops only)
+  kewlfft.aur.aur:
+    use: yay
+    name: msi-ec-dkms-git
+    state: present
+  become: true
+  become_user: aur_builder
+  when: is_msi_device
 
 - name: Install Astal libraries
   kewlfft.aur.aur:
@@ -160,3 +180,34 @@
     mode: '0755'
   loop:
     - setbg
+
+- name: Background script (keyboard backlight helper, MSI laptops only)
+  ansible.builtin.copy:
+    src: scripts/kbdlight.sh
+    dest: "/home/{{ current_user }}/.local/bin/kbdlight"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+  when: is_msi_device
+
+- name: Allow users to control MSI keyboard backlight (MSI laptops only)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/udev/rules.d/99-msi-kbd-backlight.rules
+    content: 'ACTION=="add", SUBSYSTEM=="leds", KERNEL=="msiacpi::kbd_backlight", RUN+="/bin/sh -c \"sleep 1 && /usr/bin/chmod 666 /sys/class/leds/%k/brightness\""'
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload udev rules
+  when: is_msi_device
+
+- name: Allow user to change keyboard backlight without sudo password (MSI laptops only)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/kbdlight
+    content: "{{ current_user }} ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/leds/msiacpi\\:\\:kbd_backlight/brightness"
+    owner: root
+    group: root
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
+  when: is_msi_device
