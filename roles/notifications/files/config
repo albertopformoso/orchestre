@@ -1,0 +1,54 @@
+# --- Appearance: glassy + rounded ---
+background-color=#5A5A63E6
+text-color=#f5f5f5eb
+border-color=#ffffff26
+border-size=1
+border-radius=10
+padding=14
+margin=10
+width=340
+height=110
+font=JetBrainsMono Nerd Font 11
+
+# --- Icons ---
+icons=1
+max-icon-size=18696969E6
+icon-location=left
+# Set this to your system's icon theme to fix missing icons
+icon-path=/usr/share/icons/Papirus:/usr/share/icons/Adwaita:/usr/share/icons/hicolor
+
+markup=1
+
+# --- Actions & Sound ---
+# 3. Play a sound when a notification arrives
+on-notify=exec paplay /usr/share/sounds/freedesktop/stereo/window-attention.oga
+
+# 4. Click to invoke the default action (focus window)
+on-button-left=invoke-default-action
+
+# 5. History limit (for restoring missed notifications)
+max-history=50
+
+# --- Auto-disappear ---
+default-timeout=10000
+ignore-timeout=0
+
+# --- Layout ---
+anchor=top-right
+sort=-time
+layer=overlay
+
+# --- Urgency-based overrides ---
+[urgency=low]
+border-color=#0000001a
+default-timeout=6000
+
+[urgency=normal]
+border-color=#0000001a
+default-timeout=8000
+
+[urgency=critical]
+background-color=#ffeeeef2
+border-color=#ff3333ff
+text-color=#cc0000ff
+default-timeout=0

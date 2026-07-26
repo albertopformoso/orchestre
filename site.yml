@@ -9,6 +9,7 @@
     - sddm
     - vim
     - hyprland
+    - notifications
 
   post_tasks:
       - name: Clean up AUR builder user and configurations
