@@ -11,5 +11,6 @@ return function(apps)
         hl.exec_cmd("hyprctl setcursor Bibata-Modern-Classic 12")
         hl.exec_cmd("hypridle")
         hl.exec_cmd("systemctl --user start hyprpolkitagent")
+        hl.exec_cmd("mako")
     end)
 end
