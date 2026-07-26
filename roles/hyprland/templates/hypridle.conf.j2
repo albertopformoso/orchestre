@@ -30,3 +30,12 @@ listener {
     on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = "off" })'
     on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = "on" })'
 }
+
+{% if is_msi_device %}
+# 4. KEYBOARD
+listener {
+    timeout = 20
+    on-timeout = ~/.local/bin/kbdlight off
+    on-resume = ~/.local/bin/kbdlight restore
+}
+{% endif %}
