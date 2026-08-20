@@ -19,7 +19,10 @@ return function(apps)
     hl.bind(secndMod .. " + F", hl.dsp.window.fullscreen({ action = "toggle" }))
     hl.bind("CTRL + SHIFT + 4", hl.dsp.exec_cmd("hyprshot -z -m region --clipboard-only"))
     hl.bind("CTRL + SHIFT + 3", hl.dsp.exec_cmd("hyprshot -m window --clipboard-only"))
-    hl.bind(secndMod .. " + C", hl.dsp.exec_cmd("hyprctl dispatch submap reset && hyprctl kill"))
+    hl.bind(secndMod .. " + C", function()
+        hl.dispatch(hl.dsp.submap("reset"))
+        hl.exec_cmd("hyprctl kill")
+    end, { submap_universal = true })
 
     -- Navigation (Arrows & Vim keys)
     local dirs = { left = "h", right = "l", up = "k", down = "j" }

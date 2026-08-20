@@ -35,8 +35,8 @@ hl.config({
         -- Please see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Tearing/ before you turn this on
         allow_tearing = true,
 
-        -- layout = "dwindle",
-	    layout = "master",
+        layout = "dwindle",
+	    -- layout = "master",
     },
 
     decoration = {
@@ -111,10 +111,10 @@ hl.config({
 
 hl.config({
     input = {
-        kb_layout  = "us",
-        kb_variant = "",
+        kb_layout  = "us,us",
+        kb_variant = ",intl",
         kb_model   = "",
-        kb_options = "",
+        kb_options = "grp:alt_shift_toggle",
         kb_rules   = "",
 
         follow_mouse = 1,
