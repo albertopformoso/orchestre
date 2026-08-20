@@ -87,6 +87,16 @@
   become_user: aur_builder
   when: is_msi_device
 
+- name: Ensure msi-ec kernel module loads automatically at boot (MSI laptops only)
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/msi-ec.conf
+    content: "msi-ec"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: is_msi_device
+
 - name: Install Astal libraries
   kewlfft.aur.aur:
     use: yay
