@@ -27,8 +27,10 @@ listener {
 # 3. TURN OFF SCREEN (e.g., after 6.5 minutes)
 listener {
     timeout = 390
-    on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = "off" })'
-    on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = "on" })'
+    # Switch to power-saver while the display is off
+    on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = "off" })' && ~/.local/bin/ppd-idle.sh save
+    # Restore the previous power profile as soon as input is detected
+    on-resume = ~/.local/bin/ppd-idle.sh restore && hyprctl dispatch 'hl.dsp.dpms({ action = "on" })'
 }
 
 {% if is_msi_device %}
