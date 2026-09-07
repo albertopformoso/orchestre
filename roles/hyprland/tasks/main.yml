@@ -79,6 +79,11 @@
     group: "{{ current_user }}"
     mode: '0755'
 
+- name: Remove stale pre-rename helper script (ppd-idle -> ppd-idle.sh)
+  ansible.builtin.file:
+    path: "{{ user_home }}/.local/bin/ppd-idle"
+    state: absent
+
 - name: Find all hyprlock scripts
   ansible.builtin.find:
     paths: "/home/{{ current_user }}/.config/hypr/hyprlock/scripts"
