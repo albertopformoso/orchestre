@@ -19,8 +19,8 @@ hl.env("QT_STYLE_OVERRIDE", "kvantum")
 -- Refer to https://wiki.hypr.land/Configuring/Basics/Variables/
 hl.config({
     general = {
-        gaps_in  = 2,
-        gaps_out = 2,
+        gaps_in  = 1,
+        gaps_out = 1,
 
         border_size = 1,
 
@@ -40,7 +40,7 @@ hl.config({
     },
 
     decoration = {
-        rounding       = 5,
+        rounding       = 0,
         rounding_power = 2,
 
         -- Change transparency of focused and unfocused windows

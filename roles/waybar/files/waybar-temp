@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# waybar-temp — CPU/GPU temperature module for waybar with since-boot stats.
+#
+# Usage: waybar-temp <cpu|gpu>
+#
+# CPU: Intel coretemp / AMD k10temp hwmon.
+# GPU: NVIDIA temp via nvidia-smi when the dGPU is awake (1s timeout so a
+#      sleeping GPU is not woken), otherwise falls back to the Intel SoC/PCH
+#      sensor (the iGPU has no hwmon on this machine).
+#
+# On hover the tooltip shows min / avg / max since boot. Statistics are kept
+# in a small state file keyed to the current boot (resets automatically on
+# reboot, so no cleanup is needed).
+set -euo pipefail
+
+kind="${1:?usage: waybar-temp <cpu|gpu>}"
+state_dir="${XDG_CACHE_HOME:-$HOME/.cache}/waybar-temp"
+state_file="$state_dir/$kind.state"
+mkdir -p "$state_dir"
+
+boot=$(awk '/^btime/ {print $2}' /proc/stat)
+
+classify() {
+    if (( $1 >= 90 )); then
+        printf 'critical'
+    elif (( $1 >= 80 )); then
+        printf 'warning'
+    else
+        printf 'normal'
+    fi
+}
+
+read_cpu_temp() {
+    local d raw
+    for d in /sys/class/hwmon/hwmon*; do
+        case "$(cat "$d/name" 2>/dev/null)" in
+            coretemp|k10temp)
+                raw=$(cat "$d/temp1_input" 2>/dev/null || echo 0)
+                echo $(( raw / 1000 ))
+                return 0
+                ;;
+        esac
+    done
+    echo ""
+}
+
+read_gpu_temp() {
+    local out temp d raw
+    if out=$(timeout 1 nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null); then
+        temp="${out//[[:space:]]/}"
+        if [[ $temp =~ ^[0-9]+$ ]]; then
+            echo "$temp"
+            return 0
+        fi
+    fi
+    # dGPU asleep: fall back to the Intel SoC/PCH sensor
+    for d in /sys/class/hwmon/hwmon*; do
+        if [[ $(cat "$d/name" 2>/dev/null) == pch_* ]]; then
+            raw=$(cat "$d/temp1_input" 2>/dev/null || echo 0)
+            echo $(( raw / 1000 ))
+            return 0
+        fi
+    done
+    echo ""
+}
+
+if [[ $kind == cpu ]]; then
+    temp=$(read_cpu_temp)
+else
+    temp=$(read_gpu_temp)
+fi
+
+if [[ -z ${temp:-} || ! $temp =~ ^[0-9]+$ ]]; then
+    echo '{"text": ""}'
+    exit 0
+fi
+
+# --- since-boot statistics -------------------------------------------------
+# State file: <boot_epoch> <count> <min> <max> <sum>
+boot=$(awk '/^btime/ {print $2}' /proc/stat)
+if [[ -f $state_file ]]; then
+    read -r s_boot s_count s_min s_max s_sum < "$state_file"
+fi
+if [[ ${s_boot:-0} != "$boot" ]]; then
+    s_boot=$boot; s_count=0; s_min=$temp; s_max=$temp; s_sum=0
+fi
+s_count=$(( s_count + 1 ))
+(( temp < s_min )) && s_min=$temp
+(( temp > s_max )) && s_max=$temp
+s_sum=$(( s_sum + temp ))
+printf '%s %s %s %s %s\n' "$s_boot" "$s_count" "$s_min" "$s_max" "$s_sum" > "$state_file"
+avg=$(( s_sum / s_count ))
+
+cls=$(classify "$temp")
+if [[ $kind == cpu ]]; then
+    icon="󰻠"
+    printf '{"text": "%s %d°C", "tooltip": "CPU Temperature\\nMax: %d°C\\nAvg: %d°C\\nMin: %d°C", "class": "%s"}\n' "$icon" "$temp" "$s_max" "$avg" "$s_min" "$cls"
+else
+    icon="󰢮"
+    printf '{"text": "%s %d°C", "tooltip": "GPU Temperature\\nMax: %d°C\\nAvg: %d°C\\nMin: %d°C", "class": "%s"}\n' "$icon" "$temp" "$s_max" "$avg" "$s_min" "$cls"
+fi

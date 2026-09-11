@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# waybar-power-menu — power options menu for waybar (rofi).
+# Entries: Lock (hyprlock), Suspend, Reboot, Power off.
+set -euo pipefail
+
+choice="$(printf '%s\n' \
+    ' Lock' \
+    ' Suspend' \
+    ' Reboot' \
+    ' Power Off' \
+    | rofi -dmenu -i -p 'Power' \
+        -theme-str 'window { width: 18em; } listview { lines: 4; }')"
+
+case "$choice" in
+    *Lock*)     hyprlock ;;
+    *Suspend*)  systemctl suspend ;;
+    *Reboot*)   systemctl reboot ;;
+    *Power*)    systemctl poweroff ;;
+    *)          exit 0 ;;
+esac
