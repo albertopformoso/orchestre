@@ -1,0 +1,87 @@
+---
+- name: Determine the non-root username running the script
+  ansible.builtin.set_fact:
+    current_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
+
+- name: Extract user home directory details
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ current_user }}"
+
+- name: Set target home path variable
+  ansible.builtin.set_fact:
+    user_home: "{{ ansible_facts['user_dir'] }}"
+
+- name: Install Waybar (AUR git build)
+  kewlfft.aur.aur:
+    use: yay
+    name:
+      - waybar-git
+    state: present
+  become: true
+  become_user: aur_builder
+
+- name: Install Waybar companion tools
+  ansible.builtin.package:
+    name:
+      - pavucontrol        # Floating volume mixer (opened by the volume module)
+      - networkmanager     # Required by the Wi-Fi menu (nmcli) and the network module
+      - bluez              # Bluetooth stack (bluez + bluetoothd) for the bluetooth module
+      - rofi-wayland       # Already used by hyprland role; menu backend for Wi-Fi/power menus
+    state: present
+
+- name: Enable bluetooth service on boot
+  ansible.builtin.systemd:
+    name: bluetooth
+    enabled: true
+    state: started
+
+- name: Enable NetworkManager service on boot
+  ansible.builtin.systemd:
+    name: NetworkManager
+    enabled: true
+    state: started
+
+- name: Ensure waybar config directory exists
+  ansible.builtin.file:
+    path: "/home/{{ current_user }}/.config/waybar"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy waybar bar configuration
+  ansible.builtin.copy:
+    src: config
+    dest: "/home/{{ current_user }}/.config/waybar/config"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+
+- name: Deploy waybar stylesheet
+  ansible.builtin.copy:
+    src: style.css
+    dest: "/home/{{ current_user }}/.config/waybar/style.css"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+
+- name: Ensure user local bin directory exists
+  ansible.builtin.file:
+    path: "{{ user_home }}/.local/bin"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy waybar menu scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ user_home }}/.local/bin/{{ item }}"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+  loop:
+    - waybar-wifi-menu
+    - waybar-power-menu
+    - waybar-temp

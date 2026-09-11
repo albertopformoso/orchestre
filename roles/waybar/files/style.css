@@ -1,0 +1,143 @@
+/* Orchestre waybar — simple full-width black top bar.
+   Accent #8CD8DE (matches SDDM), text #f5f5f5. */
+
+* {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 10px;
+    font-feature-settings: "tnum";
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+}
+
+window#waybar {
+    background-color: #000000;
+    color: #f5f5f5eb;
+}
+
+/* Modules sit directly on the bar: no per-module backgrounds, just spacing */
+#pulseaudio,
+#network,
+#bluetooth,
+#temps,
+#power-profiles-daemon,
+#battery,
+#clock,
+#custom-power,
+#workspaces {
+    background: transparent;
+    border: none;
+    padding: 0 6px;
+    margin: 0;
+}
+
+/* --- Workspaces: dots --------------------------------------------------- */
+
+#workspaces button {
+    background: transparent;
+    border: none;
+    padding: 0 5px;
+    color: #9a9aa5;
+    transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+
+#workspaces button.active {
+    color: #8cd8de;
+    font-weight: bold;
+}
+
+#workspaces button.empty {
+    color: #585860;
+}
+
+#workspaces button:hover {
+    color: #f5f5f5eb;
+    background: transparent;
+}
+
+/* Urgent workspace (e.g. new browser page in background tab): blinking dot */
+#workspaces button.urgent {
+    color: #ff6b6b;
+    animation: urgent-blink 1s linear infinite;
+}
+
+@keyframes urgent-blink {
+    0%   { color: #ff6b6b; }
+    50%  { color: rgba(255, 107, 107, 0.15); }
+    100% { color: #ff6b6b; }
+}
+
+/* --- Right side modules -------------------------------------------------- */
+
+#pulseaudio.muted {
+    color: #9a9aa5;
+}
+
+#network.disconnected,
+#network.disabled {
+    color: #ff6b6b;
+}
+
+/* Bluetooth: blue when on, greyed when off/disabled, cyan when connected */
+#bluetooth.on { color: #7db8f0; }
+#bluetooth.connected { color: #8cd8de; }
+#bluetooth.off, #bluetooth.disabled { color: #6a6a74; }
+
+/* Temperatures: CPU blue, GPU green (custom script with since-boot stats) */
+#custom-cpu { color: #7db8f0; }
+#custom-gpu { color: #82d9a0; }
+#custom-cpu.warning, #custom-gpu.warning { color: #f0c674; }
+#custom-cpu.critical, #custom-gpu.critical { color: #ff5555; animation: urgent-blink 1s linear infinite; }
+
+#temps #custom-cpu,
+#temps #custom-gpu {
+    background: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+}
+
+#temps #custom-gpu {
+    padding-left: 6px;
+}
+
+/* Power profiles */
+#power-profiles-daemon.performance { color: #ff6b6b; }
+#power-profiles-daemon.balanced { color: #f0c674; }
+#power-profiles-daemon.power-saver { color: #82d9a0; }
+
+/* Battery: green while charging/plugged/full, amber/red when low */
+#battery.charging,
+#battery.plugged,
+#battery.full { color: #82d9a0; }
+#battery.warning.discharging { color: #f0c674; }
+#battery.critical.discharging { color: #ff6b6b; animation: urgent-blink 1s linear infinite; }
+
+#custom-power {
+    color: #f5f5f5eb;
+}
+
+/* Hover: brighten the icon/text instead of painting a background */
+#custom-power:hover,
+#bluetooth:hover,
+#temps:hover,
+#pulseaudio:hover,
+#network:hover,
+#power-profiles-daemon:hover,
+#battery:hover,
+#clock:hover {
+    color: #ffffff;
+    background: transparent;
+}
+
+/* Calendar tooltip: keep it dark for readability */
+tooltip {
+    background-color: #2b2b31f2;
+    border: 1px solid #ffffff26;
+    border-radius: 5px;
+    padding: 10px;
+}
+
+tooltip label {
+    color: #f5f5f5eb;
+}

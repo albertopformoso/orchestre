@@ -12,5 +12,6 @@ return function(apps)
         hl.exec_cmd("hypridle")
         hl.exec_cmd("systemctl --user start hyprpolkitagent")
         hl.exec_cmd("mako")
+        hl.exec_cmd("waybar")
     end)
 end
