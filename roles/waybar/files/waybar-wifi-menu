@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# waybar-wifi-menu — Wi-Fi control menu for waybar (NetworkManager + rofi).
+# Left-click on the waybar network module opens this menu:
+#   - enable/disable Wi-Fi
+#   - disconnect / switch to another known network
+#   - rescan
+set -euo pipefail
+
+radio="$(nmcli radio wifi)"
+
+get_current() {
+    nmcli -t -f NAME,TYPE connection show --active 2>/dev/null \
+        | awk -F: '$2 == "802-11-wireless" { print $1; exit }'
+}
+
+list_known() {
+    nmcli -t -f NAME,TYPE connection show \
+        | awk -F: '$2 == "802-11-wireless" { print $1 }' \
+        | sort -u
+}
+
+opts=()
+if [[ $radio == enabled ]]; then
+    opts+=("󰤮  Disable Wi-Fi" "󰖩  Rescan networks")
+    current="$(get_current || true)"
+    if [[ -n $current ]]; then
+        opts+=("󰖪  Disconnect (from ${current})")
+    fi
+    mapfile -t known < <(list_known)
+    for name in "${known[@]}"; do
+        if [[ -n $name && $name != "$current" ]]; then
+            opts+=("󰈅  $name")
+        fi
+    done
+else
+    opts+=("󰤨  Enable Wi-Fi")
+fi
+
+choice="$(printf '%s\n' "${opts[@]}" | rofi -dmenu -i -p 'Wi-Fi' \
+    -theme-str 'window { width: 30em; } listview { lines: 12; }')"
+
+case "$choice" in
+    *Disable*)
+        nmcli radio wifi off
+        ;;
+    *Enable*)
+        nmcli radio wifi on
+        ;;
+    *Rescan*)
+        nmcli device wifi rescan 2>/dev/null || true
+        ;;
+    *Disconnect*)
+        dev="$(nmcli -t -f DEVICE,TYPE device status | awk -F: '$2 == "wifi" { print $1; exit }')"
+        nmcli device disconnect "$dev"
+        ;;
+    "")
+        exit 0
+        ;;
+    *)
+        # Any other entry is a known connection name -> connect/switch
+        nmcli connection up id "${choice#*  }" >/dev/null 2>&1 &
+        ;;
+esac

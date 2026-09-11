@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# waybar-gpu-temp — GPU temperature for the waybar bar.
+#
+# This machine has an Intel iGPU (no dedicated hwmon on Whiskey Lake) and an
+# NVIDIA GTX 1050 Ti Max-Q that is runtime-powered-down when idle (no
+# /dev/nvidia*, nvidia-smi fails until the driver wakes the GPU).
+#
+# Strategy:
+#   1. If the NVIDIA GPU is awake, read its temperature via nvidia-smi
+#      (with a short timeout so a sleeping GPU is not hammered awake).
+#   2. Otherwise, fall back to the Intel PCH/SoC sensor as a proxy so the
+#      module always shows something (the iGPU has no separate hwmon).
+# Output is JSON so the module can switch CSS classes by temperature.
+set -euo pipefail
+
+WARN=85
+CRIT=95
+
+classify() {
+    # $1 = temperature in Celsius
+    if (( $1 >= CRIT )); then
+        printf 'critical'
+    elif (( $1 >= WARN )); then
+        printf 'warning'
+    else
+        printf 'normal'
+    fi
+}
+
+# Try the NVIDIA dGPU, but bail out fast if it is powered down.
+if out=$(timeout 1 nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null); then
+    temp="${out//[[:space:]]/}"
+    if [[ $temp =~ ^[0-9]+$ ]]; then
+        cls=$(classify "$temp")
+        printf '{"text": "󰢮 %d°C", "tooltip": "NVIDIA GPU temperature: %d°C", "class": "%s"}\n' "$temp" "$temp" "$cls"
+        exit 0
+    fi
+fi
+
+# Fallback: Intel SoC/PCH temperature as a proxy (first hwmon named pch_*)
+for d in /sys/class/hwmon/hwmon*; do
+    if [[ $(cat "$d/name" 2>/dev/null) == pch_* ]]; then
+        raw=$(cat "$d/temp1_input" 2>/dev/null || echo 0)
+        temp=$(( raw / 1000 ))
+        cls=$(classify "$temp")
+        printf '{"text": "󰍛 %d°C", "tooltip": "dGPU asleep — Intel SoC temperature: %d°C", "class": "%s"}\n' "$temp" "$temp" "$cls"
+        exit 0
+    fi
+done
+
+# Nothing available: hide the module
+echo '{"text": ""}'

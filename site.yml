@@ -10,6 +10,7 @@
     - vim
     - hyprland
     - notifications
+    - waybar
 
   post_tasks:
       - name: Clean up AUR builder user and configurations
