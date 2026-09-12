@@ -97,3 +97,30 @@
   loop: "{{ hyprlock_scripts.files }}"
   loop_control:
     label: "{{ item.path | basename }}"
+
+- name: Ensure logind drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/logind.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Deploy logind drop-in so Hyprland owns lid handling
+  ansible.builtin.copy:
+    dest: /etc/systemd/logind.conf.d/10-hyprland-lid.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Lid actions are handled by Hyprland switch binds (keybindings.lua) plus
+      # ~/.local/bin/lid-suspend.sh: lock on close, suspend after 1.5h still closed.
+      # Caveat: with these set to ignore, the lid does nothing when Hyprland is
+      # not running (e.g. logged into a TTY).
+      [Login]
+      HandleLidSwitch=ignore
+      HandleLidSwitchExternalPower=ignore
+      HandleLidSwitchDocked=ignore
+  become: true
+  notify: Restart systemd-logind
