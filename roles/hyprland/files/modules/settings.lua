@@ -114,16 +114,18 @@ hl.config({
         kb_layout  = "us,us",
         kb_variant = ",intl",
         kb_model   = "",
-        kb_options = "grp:alt_shift_toggle",
+        kb_options = "grp:alt_space_toggle",
         kb_rules   = "",
 
         follow_mouse = 1,
 
-        sensitivity = 0, -- -1.0 - 1.0, 0 means no modification.
+        accel_profile = "custom",
+        scroll_points = "175 0.0 0.5",
+        sensitivity   = 0, -- -1.0 - 1.0, 0 means no modification.
 
         touchpad = {
             natural_scroll = true,
-	    scroll_factor = 0.3
+            scroll_factor = 0.45
         },
     },
 })

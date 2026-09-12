@@ -27,6 +27,7 @@
       - pavucontrol        # Floating volume mixer (opened by the volume module)
       - networkmanager     # Required by the Wi-Fi menu (nmcli) and the network module
       - bluez              # Bluetooth stack (bluez + bluetoothd) for the bluetooth module
+      - bluez-utils        # bluetoothctl: saves/restores adapter power state across reboots
       - rofi-wayland       # Already used by hyprland role; menu backend for Wi-Fi/power menus
     state: present
 
@@ -35,6 +36,111 @@
     name: bluetooth
     enabled: true
     state: started
+
+- name: Keep bluez from force-powering adapters at boot (AutoEnable=false)
+  # bluez >= 5.65 defaults AutoEnable=true: bluetoothd powers every adapter on
+  # at service start and on resume, discarding the user's last choice. With
+  # false the adapter boots powered off; the units below restore the state
+  # saved at the previous clean shutdown.
+  ansible.builtin.lineinfile:
+    path: /etc/bluetooth/main.conf
+    regexp: '^\s*#?\s*AutoEnable\s*='
+    line: 'AutoEnable=false'
+    insertafter: '^\[Policy\]'
+  notify: Restart bluetooth service
+
+- name: Deploy Bluetooth power-state helper script
+  ansible.builtin.copy:
+    dest: /usr/local/bin/bluetooth-power-state
+    owner: root
+    group: root
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      # Persist the Bluetooth adapter's Powered state across reboots: bluez
+      # doesn't store it, and AutoEnable=false boots the adapter powered off.
+      STATE_FILE=/var/lib/bluetooth-power-state
+
+      save() {
+          if bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; then
+              echo on > "$STATE_FILE"
+          else
+              echo off > "$STATE_FILE"
+          fi
+      }
+
+      restore() {
+          [ "$(cat "$STATE_FILE" 2>/dev/null)" = "on" ] || exit 0
+          # Controller registration can lag bluetoothd startup (firmware load)
+          for _ in 1 2 3 4 5 6 7 8; do
+              if bluetoothctl power on 2>/dev/null; then
+                  exit 0
+              fi
+              sleep 1
+          done
+          echo "bluetooth-power-state: controller never appeared; leaving Bluetooth off" >&2
+      }
+
+      case "$1" in
+          save) save ;;
+          restore) restore ;;
+          *) echo "usage: $0 {save|restore}" >&2; exit 2 ;;
+      esac
+
+- name: Deploy Bluetooth power-state save unit (records state at shutdown)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/bluetooth-state-save.service
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Save Bluetooth adapter power state on shutdown
+      # After= makes this unit's stop run before bluetooth.service's stop, so
+      # bluetoothd is still up when queried; PartOf= re-saves on BT restarts.
+      PartOf=bluetooth.service
+      After=bluetooth.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/bin/true
+      ExecStop=/usr/local/bin/bluetooth-power-state save
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Deploy Bluetooth power-state restore unit (re-applies state at boot)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/bluetooth-state-restore.service
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Restore Bluetooth adapter power state saved at shutdown
+      After=bluetooth.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/bin/bluetooth-power-state restore
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Load the Bluetooth power-state units into systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable Bluetooth power-state save and restore units
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - bluetooth-state-save.service
+    - bluetooth-state-restore.service
 
 - name: Enable NetworkManager service on boot
   ansible.builtin.systemd:

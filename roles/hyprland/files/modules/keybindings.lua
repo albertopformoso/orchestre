@@ -62,4 +62,10 @@ return function(apps)
     hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
     hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
     hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
+
+    -- Lid Switch: close -> switch:on, open -> switch:off (libinput state, no inversion).
+    -- The name must match `hyprctl devices` exactly; adjust both binds if it differs.
+    -- Lock now; lid-suspend.sh schedules a suspend 1.5h later unless the lid opens.
+    hl.bind("switch:on:Lid Switch",  hl.dsp.exec_cmd("~/.local/bin/lid-suspend.sh close; pidof hyprlock || hyprlock -c ~/.config/hypr/hyprlock/hyprlock.conf"), { locked = true })
+    hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd("~/.local/bin/lid-suspend.sh open"), { locked = true })
 end
