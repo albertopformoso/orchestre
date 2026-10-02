@@ -7,15 +7,6 @@
     group: "{{ current_user }}"
     mode: '0755'
 
-- name: Install Nerd Fonts
-  become: true
-  community.general.pacman:
-    name:
-      - ttf-jetbrains-mono-nerd
-      - ttf-meslo-nerd
-      - ttf-nerd-fonts-symbols-mono
-    state: present
-
 - name: Set JetBrainsMono Nerd Font as default monospace system-wide
   become: true
   ansible.builtin.copy:
