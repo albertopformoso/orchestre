@@ -20,7 +20,8 @@ window#waybar {
 #network,
 #bluetooth,
 #temps,
-#power-profiles-daemon,
+#custom-power-profile,
+#custom-fan-mode,
 #battery,
 #clock,
 #custom-power,
@@ -101,10 +102,24 @@ window#waybar {
     padding-left: 6px;
 }
 
+/* Power profile + fan control: paired tight (4px total gap instead of the
+   usual 12px) so they read as one block, yet stay separate click targets */
+#custom-power-profile { padding-right: 2px; }
+#custom-fan-mode { padding-left: 2px; }
+
 /* Power profiles */
-#power-profiles-daemon.performance { color: #ff6b6b; }
-#power-profiles-daemon.balanced { color: #f0c674; }
-#power-profiles-daemon.power-saver { color: #82d9a0; }
+#custom-power-profile.performance { color: #ff6b6b; }
+#custom-power-profile.balanced { color: #f0c674; }
+#custom-power-profile.power-saver { color: #82d9a0; }
+
+/* Fan mode: cool blue silent, amber auto, hot red boost (glow grows with
+   the state so the mode reads at a glance even when the spin isn't watched) */
+#custom-fan-mode.silent { color: #6f9fff; }
+#custom-fan-mode.auto { color: #f0c674; }
+#custom-fan-mode.boost {
+    color: #ff6b6b;
+    text-shadow: 0 0 8px rgba(255, 107, 107, 0.75);
+}
 
 /* Battery: green while charging/plugged/full, amber/red when low */
 #battery.charging,
@@ -123,7 +138,8 @@ window#waybar {
 #temps:hover,
 #pulseaudio:hover,
 #network:hover,
-#power-profiles-daemon:hover,
+#custom-power-profile:hover,
+#custom-fan-mode:hover,
 #battery:hover,
 #clock:hover {
     color: #ffffff;

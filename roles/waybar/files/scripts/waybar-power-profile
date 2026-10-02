@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# waybar-power-profile — power profile switcher for waybar (custom module).
+# Waybar's built-in power-profiles-daemon module ignores on-click handlers,
+# so the bar uses this script instead: it renders the active profile and, on
+# click, cycles power-saver -> balanced -> performance (left click, forward;
+# right click, reverse) while keeping the MSI EC shift/fan/boost modes in sync
+# (msi-ec sysfs, MSI laptops only).
+#
+# The daemon is reached directly over D-Bus via busctl: powerprofilesctl is a
+# Python script whose ~200ms interpreter startup makes clicks feel laggy.
+#
+# usage: waybar-power-profile            print waybar JSON for current profile
+#        waybar-power-profile set next   cycle to the next profile
+#        waybar-power-profile set prev   cycle to the previous profile
+#        waybar-power-profile set NAME   switch to a specific profile
+set -euo pipefail
+
+MSI_EC=/sys/devices/platform/msi-ec
+PROFILES=(power-saver balanced performance)
+ICONS=(󰾆 󰾅 󰓅)
+PPD_DEST=org.freedesktop.UPower.PowerProfiles
+PPD_PATH=/org/freedesktop/UPower/PowerProfiles
+PPD_IFACE=org.freedesktop.UPower.PowerProfiles
+
+notify_err() {
+    notify-send -u critical 'Power profile' "$1" 2>/dev/null || true
+}
+
+# Name of the active power-profiles-daemon profile; empty if the daemon is
+# unreachable. busctl is preferred (fast); powerprofilesctl is the fallback.
+current_profile() {
+    local p
+    p="$(busctl --system get-property "$PPD_DEST" "$PPD_PATH" "$PPD_IFACE" \
+        ActiveProfile 2>/dev/null || true)"
+    p="${p#*\"}"; p="${p%\"}"
+    if [[ $p == power-saver || $p == balanced || $p == performance ]]; then
+        echo "$p"
+    else
+        p="$(powerprofilesctl get 2>/dev/null || true)"
+        if [[ $p == power-saver || $p == balanced || $p == performance ]]; then
+            echo "$p"
+        fi
+    fi
+}
+
+# Index of the active profile in PROFILES; balanced's index if the daemon is
+# unreachable or reports something unexpected.
+current_index() {
+    local p i
+    p="$(current_profile)"
+    for i in "${!PROFILES[@]}"; do
+        if [[ ${PROFILES[i]} == "$p" ]]; then
+            echo "$i"
+            return
+        fi
+    done
+    echo 1
+}
+
+# Keep the EC in step with the profile (no-op when msi-ec is absent, e.g.
+# non-MSI machines). cooler_boost is forced on only for performance.
+apply_msi_ec() {
+    local profile="$1"
+    [[ -d $MSI_EC ]] || return 0
+    case "$profile" in
+        power-saver)
+            echo eco     | sudo -n tee "$MSI_EC/shift_mode"   >/dev/null
+            echo silent  | sudo -n tee "$MSI_EC/fan_mode"     >/dev/null
+            echo off     | sudo -n tee "$MSI_EC/cooler_boost" >/dev/null
+            ;;
+        balanced)
+            echo comfort | sudo -n tee "$MSI_EC/shift_mode"   >/dev/null
+            echo auto    | sudo -n tee "$MSI_EC/fan_mode"     >/dev/null
+            echo off     | sudo -n tee "$MSI_EC/cooler_boost" >/dev/null
+            ;;
+        performance)
+            echo turbo   | sudo -n tee "$MSI_EC/shift_mode"   >/dev/null
+            echo on      | sudo -n tee "$MSI_EC/cooler_boost" >/dev/null
+            ;;
+    esac
+}
+
+if [[ ${1:-} == set ]]; then
+    # Serialize overlapping clicks so each one starts from the fresh state.
+    exec 9>"${XDG_RUNTIME_DIR:-/tmp}/waybar-power-profile.lock"
+    flock 9
+
+    target="${2:-}"
+    if [[ $target == next ]]; then
+        i="$(current_index)"
+        target="${PROFILES[$(( (i + 1) % ${#PROFILES[@]} ))]}"
+    elif [[ $target == prev ]]; then
+        i="$(current_index)"
+        target="${PROFILES[$(( (i - 1 + ${#PROFILES[@]}) % ${#PROFILES[@]} ))]}"
+    fi
+    if ! busctl --system set-property "$PPD_DEST" "$PPD_PATH" "$PPD_IFACE" \
+            ActiveProfile s "$target" \
+        && ! powerprofilesctl set "$target"; then
+        notify_err "Failed to set profile '$target'"
+        exit 1
+    fi
+    # Nudge waybar to re-render immediately so the icon flips before the
+    # (slower) EC sync runs; no-op when waybar isn't running.
+    pkill -RTMIN+8 waybar 2>/dev/null || true
+    if ! apply_msi_ec "$target"; then
+        notify_err "Profile set, but writing $MSI_EC failed (sudoers entry missing?)"
+        exit 1
+    fi
+fi
+
+i="$(current_index)"
+printf '{"text": "%s", "class": "%s", "tooltip": "Power profile: %s\\nClick: next\\nRight-click: previous"}\n' \
+    "${ICONS[i]}" "${PROFILES[i]}" "${PROFILES[i]}"
