@@ -2,3 +2,11 @@
   ansible.builtin.systemd:
     name: bluetooth
     state: restarted
+
+- name: Restart Bluetooth state services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - bluetooth-state-save.service
+    - bluetooth-state-monitor.service

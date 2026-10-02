@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# waybar-fan-mode — independent MSI fan control for waybar (custom module).
+# Complements waybar-power-profile: cycles the EC fan mode on its own,
+# silent -> auto -> cooler_boost, without touching the power profile. The
+# icon shows the fan glyph plus a braille "blade" spinner whose speed
+# encodes the state (slow crawl silent, steady auto, frantic boost), and
+# style.css colors the module per state.
+#
+# usage: waybar-fan-mode            print waybar JSON for the current fan state
+#        waybar-fan-mode set next   cycle forward  (silent -> auto -> boost)
+#        waybar-fan-mode set prev   cycle backward (boost -> auto -> silent)
+set -euo pipefail
+
+MSI_EC=/sys/devices/platform/msi-ec
+STATES=(silent auto boost)
+FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+# Milliseconds per spinner frame, per state: the spin speed IS the state.
+SPIN_MS=(600 180 70)
+
+notify_err() {
+    notify-send -u critical 'Fan mode' "$1" 2>/dev/null || true
+}
+
+# Active fan state: 'boost' when cooler_boost is on, else the fan_mode value;
+# empty when msi-ec is unavailable (non-MSI machines).
+current_state() {
+    local boost mode
+    boost="$(cat "$MSI_EC/cooler_boost" 2>/dev/null || true)"
+    mode="$(cat "$MSI_EC/fan_mode" 2>/dev/null || true)"
+    if [[ $boost == on ]]; then
+        echo boost
+    elif [[ $mode == silent || $mode == auto ]]; then
+        echo "$mode"
+    fi
+}
+
+# Keep fan_mode and cooler_boost in step with the chosen state; requires the
+# sudoers tee entries from the waybar role (no-op failure otherwise).
+apply_state() {
+    local state="$1"
+    case "$state" in
+        silent)
+            echo silent | sudo -n tee "$MSI_EC/fan_mode"     >/dev/null
+            echo off     | sudo -n tee "$MSI_EC/cooler_boost" >/dev/null
+            ;;
+        auto)
+            echo auto | sudo -n tee "$MSI_EC/fan_mode"       >/dev/null
+            echo off   | sudo -n tee "$MSI_EC/cooler_boost"  >/dev/null
+            ;;
+        boost)
+            echo auto | sudo -n tee "$MSI_EC/fan_mode"       >/dev/null
+            echo on    | sudo -n tee "$MSI_EC/cooler_boost"  >/dev/null
+            ;;
+    esac
+}
+
+if [[ ${1:-} == set ]]; then
+    # Serialize overlapping clicks so each one starts from the fresh state.
+    exec 9>"${XDG_RUNTIME_DIR:-/tmp}/waybar-fan-mode.lock"
+    flock 9
+
+    state="$(current_state)"
+    case "$state" in
+        silent) i=0 ;;
+        boost)  i=2 ;;
+        *)      i=1 ;;  # auto, or unknown -> treat as auto
+    esac
+    case "${2:-}" in
+        prev) i=$(( (i + 2) % ${#STATES[@]} )) ;;
+        *)    i=$(( (i + 1) % ${#STATES[@]} )) ;;
+    esac
+    target="${STATES[i]}"
+    if ! apply_state "$target"; then
+        notify_err "Failed to set fan mode '$target' (msi-ec missing or sudoers entry absent?)"
+        exit 1
+    fi
+    # Nudge waybar to re-render immediately; no-op when waybar isn't running.
+    pkill -RTMIN+7 waybar 2>/dev/null || true
+fi
+
+state="$(current_state)"
+if [[ -z $state ]]; then
+    # msi-ec unavailable: neutral icon, no cycling classes.
+    printf '{"text": "󰈐", "tooltip": "Fan control unavailable (msi-ec not found)"}\n'
+    exit 0
+fi
+
+case "$state" in
+    silent) step=600 ;;
+    boost)  step=70 ;;
+    *)      step=180 ;;
+esac
+# Frame picked from the wall clock: stateless, so the spin speed is simply
+# the frame step per state (waybar re-renders every 200ms).
+ms="${EPOCHREALTIME/./}"; ms="10#${ms:0:13}"
+frame=$(( (ms / step) % ${#FRAMES[@]} ))
+printf '{"text": "󰈐%s", "class": "%s", "tooltip": "Fan: %s\\nClick: next\\nRight-click: previous"}\n' \
+    "${FRAMES[frame]}" "$state" "$state"
