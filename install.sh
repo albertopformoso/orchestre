@@ -28,9 +28,7 @@ else
     echo -e "${RECOLOR}[+] No requirements.yml found. Skipping Galaxy install.${NOCOLOR}"
 fi
 
-# 3. Verify the Ansible configuration structure exists locally
-
-# 4. Run the Ansible Playbook(s)
+# 3. Run the Ansible Playbook
 echo -e "${RECOLOR}[*] Tuning the instruments... Running Ansible Playbook... ${NOCOLOR}"
 
 # --ask-become-pass prompts you for your sudo password so Ansible can install system packages

@@ -1,13 +1,4 @@
 ---
-- name: Install prerequisites
-  ansible.builtin.package:
-    name:
-      - sddm
-      - qt6-declarative
-      - qt6-svg
-    state: present
-  become: true
-
 - name: Remove any previous Orchestre theme installation
   ansible.builtin.file:
     path: /usr/share/sddm/themes/orchestre

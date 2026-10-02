@@ -3,6 +3,24 @@
   hosts: local
   become: true
 
+  pre_tasks:
+    - name: Determine the non-root username running the script
+      ansible.builtin.set_fact:
+        current_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
+
+    - name: Extract user home directory details
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ current_user }}"
+
+    - name: Set target home path variable
+      ansible.builtin.set_fact:
+        user_home: "{{ ansible_facts['user_dir'] }}"
+
+    - name: Detect MSI laptop (msi-ec sysfs interface availability)
+      ansible.builtin.set_fact:
+        is_msi_device: "{{ 'micro-star' in (ansible_facts['system_vendor'] | default('') | lower) }}"
+
   roles:
     - system
     - fonts

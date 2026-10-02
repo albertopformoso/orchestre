@@ -1,8 +1,4 @@
 ---
-- name: Determine whether this host is an MSI machine
-  ansible.builtin.set_fact:
-    is_msi_device: "{{ 'micro-star' in (ansible_facts['system_vendor'] | default('') | lower) }}"
-
 - name: Update system packages (pacman)
   community.general.pacman:
     update_cache: true
@@ -24,9 +20,12 @@
     replace: 'timeout 0'
   when: timeout_update.failed or (timeout_update.msg is defined and "Could not find" in timeout_update.msg)
 
-- name: Install essential system and CLI tools
+# All repo packages are installed in one transaction: pacman holds a global
+# lock, so a single call is both correct and much faster than several.
+- name: Install all pacman (repo) packages
   ansible.builtin.package:
     name:
+      # Essential system and CLI tools
       - ufw
       - git
       - base-devel
@@ -43,6 +42,38 @@
       - okular
       - bluetui
       - tree
+      # System libraries (previously separate task)
+      - gtk-layer-shell
+      - webkit2gtk-4.1
+      - dart-sass
+      - qt6ct
+      # Fonts (from the fonts role)
+      - ttf-jetbrains-mono-nerd
+      - ttf-meslo-nerd
+      - ttf-nerd-fonts-symbols-mono
+      # SDDM display manager (from the sddm role)
+      - sddm
+      - qt6-declarative
+      - qt6-svg
+      # Hyprland desktop (from the hyprland role)
+      - hyprland
+      - rofi-wayland    # Clean application launcher (also used by waybar menus)
+      - swww            # High-performance animated wallpaper daemon
+      - wl-clipboard    # System clipboard integration for Wayland
+      - xorg-xwayland   # For legacy apps that don't support Wayland natively
+      - hyprpaper
+      - hyprlock
+      - hypridle
+      - hyprpolkitagent
+      # Notifications (from the notifications role)
+      - mako
+      - gdk-pixbuf2
+      - papirus-icon-theme
+      # Waybar companions (from the waybar role)
+      - pavucontrol        # Floating volume mixer (opened by the volume module)
+      - networkmanager     # Required by the Wi-Fi menu (nmcli) and the network module
+      - bluez              # Bluetooth stack (bluez + bluetoothd) for the bluetooth module
+      - bluez-utils        # bluetoothctl: saves/restores adapter power state across reboots
     state: present
 
 - name: Create the `aur_builder` user
@@ -61,15 +92,19 @@
     mode: 0644
     validate: 'visudo -cf %s'
 
-- name: Install AUR packages for system libraries
-  ansible.builtin.package:
+# All AUR builds run in one yay invocation: yay serializes on pacman's lock
+# anyway, and one call means one dependency resolution pass.
+- name: Install AUR packages (single yay run)
+  kewlfft.aur.aur:
+    use: yay
     name:
-      - gtk-layer-shell
-      - webkit2gtk-4.1
-      - dart-sass
-      - qt6ct
+      - nwg-look
+      - gnome-themes-extra
+      - hyprshot
+      - waybar-git
     state: present
   become: true
+  become_user: aur_builder
 
 - name: Remove leftover msi-ec config from a previous manual install (MSI laptops only)
   ansible.builtin.file:
@@ -87,25 +122,31 @@
   become_user: aur_builder
   when: is_msi_device
 
-- name: Ensure msi-ec kernel module loads automatically at boot (MSI laptops only)
-  ansible.builtin.copy:
-    dest: /etc/modules-load.d/msi-ec.conf
-    content: "msi-ec"
-    owner: root
-    group: root
+# Start the cursor download now so it runs over the network while the rest of
+# the configuration proceeds; the async_status task at the end of this role
+# waits for it. (unarchive doesn't support async, so download and extract are
+# split: get_url fetches the tarball async, extraction happens at the end.)
+- name: Download Bibata cursor theme tarball (async)
+  ansible.builtin.get_url:
+    url: "https://github.com/ful1e5/Bibata_Cursor/releases/latest/download/Bibata-Modern-Classic.tar.xz"
+    dest: /var/tmp/Bibata-Modern-Classic.tar.xz
     mode: '0644'
   become: true
-  when: is_msi_device
+  async: 600
+  poll: 0
+  register: bibata_download
 
-- name: Install Astal libraries
-  kewlfft.aur.aur:
-    use: yay
-    name:
-      - nwg-look
-      - gnome-themes-extra
-    state: present
-  become: true
-  become_user: aur_builder
+- name: Ensure local icons directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['user_dir'] }}/.local/share/icons"
+    state: directory
+    mode: '0755'
+
+- name: Ensure local icons directory exists (by uid path)
+  ansible.builtin.file:
+    path: "/home/{{ ansible_facts['user_id'] }}/.local/share/icons"
+    state: directory
+    mode: '0755'
 
 - name: Enable UFW service on boot
   ansible.builtin.systemd:
@@ -125,26 +166,7 @@
     enabled: true
     state: started
 
-- name: Ensure local icons directory exists
-  ansible.builtin.file:
-    path: "{{ ansible_facts['user_dir'] }}/.local/share/icons"
-    state: directory
-    mode: '0755'
-
-- name: Ensure local icons directory exists
-  ansible.builtin.file:
-    path: "/home/{{ ansible_facts['user_id'] }}/.local/share/icons"
-    state: directory
-    mode: '0755'
-
-- name: Download and extract Bibata cursor theme to system-wide directory
-  ansible.builtin.unarchive:
-    src: "https://github.com/ful1e5/Bibata_Cursor/releases/latest/download/Bibata-Modern-Classic.tar.xz"
-    dest: "/usr/share/icons/"
-    remote_src: true
-  become: true
-
-- name: Ensure default icon theme directory exists
+- name: Ensure system-wide icons directory exists
   ansible.builtin.file:
     path: /usr/share/icons/default
     state: directory
@@ -221,3 +243,17 @@
     mode: '0440'
     validate: /usr/sbin/visudo -cf %s
   when: is_msi_device
+
+- name: Wait for Bibata cursor theme download to finish
+  ansible.builtin.async_status:
+    jid: "{{ bibata_download.ansible_job_id }}"
+  register: bibata_result
+  until: bibata_result.finished
+  retries: 60
+  delay: 10
+
+- name: Extract Bibata cursor theme to system-wide directory
+  ansible.builtin.unarchive:
+    src: /var/tmp/Bibata-Modern-Classic.tar.xz
+    dest: "/usr/share/icons/"
+  become: true
