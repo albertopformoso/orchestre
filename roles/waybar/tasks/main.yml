@@ -12,6 +12,10 @@
   ansible.builtin.set_fact:
     user_home: "{{ ansible_facts['user_dir'] }}"
 
+- name: Detect MSI laptop (msi-ec sysfs interface availability)
+  ansible.builtin.set_fact:
+    is_msi_device: "{{ 'micro-star' in (ansible_facts['system_vendor'] | default('') | lower) }}"
+
 - name: Install Waybar (AUR git build)
   kewlfft.aur.aur:
     use: yay
@@ -57,35 +61,93 @@
     mode: '0755'
     content: |
       #!/bin/sh
-      # Persist the Bluetooth adapter's Powered state across reboots: bluez
-      # doesn't store it, and AutoEnable=false boots the adapter powered off.
+      # Persist the Bluetooth adapter's Powered state across reboots, suspends,
+      # and shutdowns: bluez doesn't store it, and AutoEnable=false boots the
+      # adapter powered off. Modes:
+      #   save    - query the adapter and write on/off to the state file
+      #   restore - explicitly apply the saved state (both on AND off)
+      #   monitor - long-running: update the state file on every power change
+      #   pause   - suspend entry: freeze the monitor, then save (see below)
+      #   resume  - wake: restore the saved state, restart the monitor
+      #
+      # pause/resume exist because bluetoothd powers adapters down as part of
+      # the suspend sequence; a live monitor would see that as a user power-off
+      # and poison the state file. Pausing freezes the saved state until wake.
       STATE_FILE=/var/lib/bluetooth-power-state
 
+      log() { echo "bluetooth-power-state: $*" >&2; }
+
+      # Query current adapter power. Echoes "on"/"off", or fails (non-zero) if
+      # bluetoothd/D-Bus can't be reached - the caller then keeps the last
+      # saved value instead of guessing.
+      query_power() {
+          powered=$(bluetoothctl show 2>/dev/null | sed -n 's/^[[:space:]]*Powered: //p' | head -n 1)
+          [ -n "$powered" ] || return 1
+          [ "$powered" = "yes" ] && echo on || echo off
+      }
+
       save() {
-          if bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; then
-              echo on > "$STATE_FILE"
-          else
-              echo off > "$STATE_FILE"
-          fi
+          state=$(query_power) || { log "query failed; keeping last saved state"; return 0; }
+          echo "$state" > "$STATE_FILE"
       }
 
       restore() {
-          [ "$(cat "$STATE_FILE" 2>/dev/null)" = "on" ] || exit 0
-          # Controller registration can lag bluetoothd startup (firmware load)
-          for _ in 1 2 3 4 5 6 7 8; do
-              if bluetoothctl power on 2>/dev/null; then
+          state=$(cat "$STATE_FILE" 2>/dev/null)
+          [ "$state" = "on" ] || [ "$state" = "off" ] || exit 0
+          # Controller registration can lag bluetoothd startup (firmware load),
+          # and bluetoothd may re-power adapters on resume; apply the saved
+          # state until it sticks. ~20s covers slow firmware loads.
+          i=0
+          while [ "$i" -lt 20 ]; do
+              if bluetoothctl power "$state" >/dev/null 2>&1; then
                   exit 0
               fi
+              i=$((i + 1))
               sleep 1
           done
-          echo "bluetooth-power-state: controller never appeared; leaving Bluetooth off" >&2
+          log "controller never appeared; leaving Bluetooth as-is"
+      }
+
+      monitor() {
+          # Seed the file with the current state, then follow live changes so
+          # the state is captured the instant the user toggles (bluetui), not
+          # just at shutdown. Covers suspend, hard power-offs, and crashes.
+          save
+          bluetoothctl monitor 2>/dev/null | while IFS= read -r line; do
+              case "$line" in
+                  *" Powered: yes") echo on > "$STATE_FILE" ;;
+                  *" Powered: no") echo off > "$STATE_FILE" ;;
+              esac
+          done
+      }
+
+      pause() {
+          # Called at suspend start, before logind's PrepareForSleep reaches
+          # bluetoothd. Stop the monitor first so bluetoothd's suspend power-
+          # down is NOT recorded as a user choice, then record the true
+          # pre-suspend state. An explicit systemctl stop never triggers the
+          # monitor's Restart=, so it stays frozen for the whole sleep.
+          systemctl stop bluetooth-state-monitor.service 2>/dev/null
+          save
+      }
+
+      resume() {
+          # Apply the pre-suspend state first (bluetoothd does not re-power
+          # adapters on resume when AutoEnable=false), then resume live
+          # tracking for the next user toggle.
+          restore
+          systemctl start bluetooth-state-monitor.service
       }
 
       case "$1" in
           save) save ;;
           restore) restore ;;
-          *) echo "usage: $0 {save|restore}" >&2; exit 2 ;;
+          monitor) monitor ;;
+          pause) pause ;;
+          resume) resume ;;
+          *) echo "usage: $0 {save|restore|monitor|pause|resume}" >&2; exit 2 ;;
       esac
+  notify: Restart Bluetooth state services
 
 - name: Deploy Bluetooth power-state save unit (records state at shutdown)
   ansible.builtin.copy:
@@ -98,8 +160,10 @@
       Description=Save Bluetooth adapter power state on shutdown
       # After= makes this unit's stop run before bluetooth.service's stop, so
       # bluetoothd is still up when queried; PartOf= re-saves on BT restarts.
+      # dbus.service ordering guarantees the final bluetoothctl query still has
+      # a system bus to talk to during shutdown.
       PartOf=bluetooth.service
-      After=bluetooth.service
+      After=bluetooth.service dbus.service
 
       [Service]
       Type=oneshot
@@ -129,11 +193,67 @@
       [Install]
       WantedBy=multi-user.target
 
+- name: Deploy Bluetooth power-state sleep unit (pause monitor + save on suspend, restore on wake)
+  # WantedBy=sleep.target: when the machine sleeps, sleep.target starts and
+  # pulls this unit in, running ExecStart (pause) beforehand. On wake the
+  # target unwinds, this unit's stop runs afterwards, and ExecStop (resume)
+  # re-applies the last chosen state. pause stops the monitor FIRST so
+  # bluetoothd's suspend-time adapter power-down is never recorded as a user
+  # choice - without that, "on" gets poisoned to "off" during every suspend.
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/bluetooth-state-sleep.service
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Save Bluetooth power state before sleep, restore it on wake
+      Before=sleep.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/bin/bluetooth-power-state pause
+      ExecStop=/usr/local/bin/bluetooth-power-state resume
+
+      [Install]
+      WantedBy=sleep.target
+
+- name: Deploy Bluetooth power-state monitor unit (live save on every toggle)
+  # Follows bluetoothctl monitor and rewrites the state file the moment the
+  # adapter's Powered property changes, so the saved state is always current -
+  # even across hard power-offs and crashes where the shutdown save never runs.
+  # The sleep unit stops this unit before suspend (bluetoothd powers adapters
+  # down as part of the suspend sequence, and that must NOT be recorded as a
+  # user choice) and starts it again on wake. The monitor process dies with
+  # bluetoothd, and Restart=always brings it back once bluetoothd re-registers;
+  # explicit systemctl stops (the pause path) suppress the restart.
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/bluetooth-state-monitor.service
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Track Bluetooth adapter power state changes live
+      PartOf=bluetooth.service
+      After=bluetooth.service dbus.service
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/bluetooth-power-state monitor
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Restart Bluetooth state services
+
 - name: Load the Bluetooth power-state units into systemd
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Enable Bluetooth power-state save and restore units
+- name: Enable Bluetooth power-state save, restore, sleep, and monitor units
   ansible.builtin.systemd:
     name: "{{ item }}"
     enabled: true
@@ -141,6 +261,8 @@
   loop:
     - bluetooth-state-save.service
     - bluetooth-state-restore.service
+    - bluetooth-state-sleep.service
+    - bluetooth-state-monitor.service
 
 - name: Enable NetworkManager service on boot
   ansible.builtin.systemd:
@@ -191,3 +313,33 @@
     - waybar-wifi-menu
     - waybar-power-menu
     - waybar-temp
+
+- name: Deploy power profile switcher script (powerprofilesctl + MSI EC sync)
+  ansible.builtin.copy:
+    src: scripts/waybar-power-profile
+    dest: "{{ user_home }}/.local/bin/waybar-power-profile"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy fan mode switcher script (MSI EC fan_mode/cooler_boost control)
+  ansible.builtin.copy:
+    src: scripts/waybar-fan-mode
+    dest: "{{ user_home }}/.local/bin/waybar-fan-mode"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Allow user to sync MSI EC power/fan modes without sudo password (MSI laptops only)
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/waybar-msi-ec
+    content: |
+      {{ current_user }} ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/devices/platform/msi-ec/shift_mode
+      {{ current_user }} ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/devices/platform/msi-ec/fan_mode
+      {{ current_user }} ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/devices/platform/msi-ec/cooler_boost
+    owner: root
+    group: root
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
+  when: is_msi_device

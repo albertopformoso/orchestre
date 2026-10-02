@@ -29,6 +29,16 @@ hl.window_rule({
     float = true,
 })
 
+hl.window_rule({
+    name  = "float-bluetui",
+    -- Opened by right-clicking the waybar bluetooth pill
+    -- (alacritty --class bluetui): a detached floating rectangle.
+    match = { class = "^bluetui$" },
+    float = true,
+    size  = "560 620",
+    pin   = true,
+})
+
 hl.config({
     xwayland = {
         enabled = true,

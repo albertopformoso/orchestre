@@ -6,7 +6,7 @@
     "spacing": 4,
 
     "modules-left": ["hyprland/workspaces"],
-    "modules-right": ["pulseaudio", "network", "bluetooth", "group/temps", "power-profiles-daemon", "battery", "clock", "custom/power"],
+    "modules-right": ["pulseaudio", "network", "bluetooth", "group/temps", "custom/power-profile", "custom/fan-mode", "battery", "clock", "custom/power"],
 
     // Dynamic workspace dots; clicking focuses the workspace.
     // The button gets the .urgent class (blinking via style.css) when a
@@ -95,7 +95,9 @@
     },
 
     // Bluetooth pill: blue when on (cyan when connected), grey when off.
-    // Left-click opens bluetui in a floating terminal (see Hyprland rule).
+    // Left-click toggles the adapter power (state persists across suspend and
+    // reboots via the bluetooth-power-state units); right-click opens bluetui
+    // in a floating terminal (see Hyprland rule).
     "bluetooth": {
         "format": "󰂯",
         "format-disabled": "󰂲",
@@ -103,28 +105,45 @@
         "format-on": "󰂯",
         "format-connected": "󰂱",
         "format-no-controller": "",
-        "tooltip-format-on": "Bluetooth on — no devices connected\nClick to open bluetui",
-        "tooltip-format-off": "Bluetooth off — click to enable",
+        "tooltip-format-on": "Bluetooth on — no devices connected\nLeft-click to turn off · Right-click for bluetui",
+        "tooltip-format-off": "Bluetooth off\nLeft-click to turn on · Right-click for bluetui",
         "tooltip-format-disabled": "Bluetooth disabled",
-        "tooltip-format-connected": "Bluetooth: {num_connections} connected\n{device_enumerate}",
+        "tooltip-format-connected": "Bluetooth: {num_connections} connected\nLeft-click to turn off · Right-click for bluetui",
         "tooltip-format-enumerate-connected": " {device_alias}",
-        "on-click": "alacritty --class bluetui -e bluetui",
+        "on-click": "sh -c 'bluetoothctl show 2>/dev/null | grep -q \"Powered: yes\" && exec bluetoothctl power off || exec bluetoothctl power on'",
+        "on-click-right": "alacritty --class bluetui -e bluetui",
         "justify": "center",
         "max-length": 8
     },
 
-    // Click cycles power-saver -> balanced -> performance
-    "power-profiles-daemon": {
-        "format": "{icon}",
-        "justify": "center",
-        "tooltip-format": "Power profile: {profile}\nClick to switch",
-        "tooltip": true,
-        "format-icons": {
-            "default": "󰓅",
-            "performance": "󰓅",
-            "balanced": "󰾅",
-            "power-saver": "󰾆"
-        }
+    // Power profile pill, rendered by waybar-power-profile (a custom module:
+    // waybar's power-profiles-daemon module ignores on-click handlers).
+    // Left click cycles power-saver -> balanced -> performance, right click
+    // cycles in reverse; the MSI EC shift/fan/boost modes stay in sync.
+    // The fan pill beside it is pulled tight (style.css) so the pair reads
+    // as one block, but each stays its own clickable module.
+    "custom/power-profile": {
+        "exec": "waybar-power-profile",
+        "return-type": "json",
+        "interval": 2,
+        "signal": 8,
+        "on-click": "waybar-power-profile set next",
+        "on-click-right": "waybar-power-profile set prev",
+        "justify": "center"
+    },
+
+    // Fan pill, rendered by waybar-fan-mode: cycles the MSI EC fan mode
+    // (silent -> auto -> cooler_boost) independently of the power profile.
+    // The braille spinner's speed encodes the state and style.css colors
+    // the module per state, so the mode is visible at a glance.
+    "custom/fan-mode": {
+        "exec": "waybar-fan-mode",
+        "return-type": "json",
+        "interval": 0.2,
+        "signal": 7,
+        "on-click": "waybar-fan-mode set next",
+        "on-click-right": "waybar-fan-mode set prev",
+        "justify": "center"
     },
 
     // Battery at the left of the clock: icon follows the charge level
