@@ -1,0 +1,184 @@
+* {
+    background:                  #141518;
+    foreground:                  #f5f6f8;
+    surface-flat:                #0e0f11;
+    surface-selected:            #1d1f23;
+    dim:                         #9398a1;
+    accent:                      #f5f6f8;
+    red:                         #f4505e;
+    red-text:                    #ff8d97;
+    border-color:                #4b5563;
+    separatorcolor:              @surface-selected;
+    background-color:            transparent;
+    spacing:                     2px;
+
+    normal-background:           @background;
+    normal-foreground:           @foreground;
+    alternate-normal-background: @surface-selected;
+    alternate-normal-foreground: @foreground;
+    selected-normal-background:  @accent;
+    selected-normal-foreground:  @surface-flat;
+
+    active-background:           @background;
+    active-foreground:           @accent;
+    alternate-active-background: @surface-selected;
+    alternate-active-foreground: @accent;
+    selected-active-background:  @accent;
+    selected-active-foreground:  @surface-flat;
+
+    urgent-background:           @background;
+    urgent-foreground:           @red-text;
+    alternate-urgent-background: @surface-selected;
+    alternate-urgent-foreground: @red-text;
+    selected-urgent-background:  @red;
+    selected-urgent-foreground:  @surface-flat;
+}
+
+window {
+    background-color: @background;
+    border:           1px;
+    border-radius:    0px;
+    padding:          5px;
+}
+
+mainbox {
+    border:  0px;
+    padding: 0px;
+}
+
+message {
+    border:       2px 0px 0px;
+    border-color: @separatorcolor;
+    padding:      1px;
+}
+
+textbox {
+    text-color: @foreground;
+}
+
+listview {
+    fixed-height: false;
+    border:       2px 0px 0px;
+    border-color: @separatorcolor;
+    spacing:      2px;
+    scrollbar:    true;
+    padding:      2px 0px 0px;
+}
+
+element {
+    border:  0px;
+    padding: 1px;
+}
+
+element-text, element-icon {
+    background-color: inherit;
+    text-color:       inherit;
+}
+
+element-text {
+    highlight: bold #f5f6f8;
+}
+
+element normal.normal {
+    background-color: @normal-background;
+    text-color:       @normal-foreground;
+}
+
+element alternate.normal {
+    background-color: @alternate-normal-background;
+    text-color:       @alternate-normal-foreground;
+}
+
+element selected.normal {
+    background-color: @selected-normal-background;
+    text-color:       @selected-normal-foreground;
+}
+
+element normal.active {
+    background-color: @active-background;
+    text-color:       @active-foreground;
+}
+
+element alternate.active {
+    background-color: @alternate-active-background;
+    text-color:       @alternate-active-foreground;
+}
+
+element selected.active {
+    background-color: @selected-active-background;
+    text-color:       @selected-active-foreground;
+}
+
+element normal.urgent {
+    background-color: @urgent-background;
+    text-color:       @urgent-foreground;
+}
+
+element alternate.urgent {
+    background-color: @alternate-urgent-background;
+    text-color:       @alternate-urgent-foreground;
+}
+
+element selected.urgent {
+    background-color: @selected-urgent-background;
+    text-color:       @selected-urgent-foreground;
+}
+
+element-text selected.normal, element-text selected.active, element-text selected.urgent {
+    highlight: bold #0e0f11;
+}
+
+scrollbar {
+    width:        4px;
+    border:       0px;
+    handle-color: @dim;
+    handle-width: 8px;
+    padding:      0px;
+}
+
+mode-switcher {
+    border:       2px 0px 0px;
+    border-color: @separatorcolor;
+}
+
+button {
+    spacing:    0px;
+    text-color: @dim;
+}
+
+button selected {
+    background-color: @selected-normal-background;
+    text-color:       @selected-normal-foreground;
+}
+
+inputbar {
+    background-color: @surface-flat;
+    spacing:          0px;
+    text-color:       @foreground;
+    padding:          1px;
+    children:         [ prompt, textbox-prompt-colon, entry, case-indicator ];
+}
+
+entry {
+    spacing:                0px;
+    text-color:             @foreground;
+    placeholder-color:      @dim;
+    cursor-color:           @accent;
+}
+
+prompt {
+    spacing:    0px;
+    text-color: @accent;
+}
+
+case-indicator {
+    spacing:    0px;
+    text-color: @dim;
+}
+
+textbox-prompt-colon {
+    expand:     false;
+    str:        ":";
+    margin:     0px 0.3em 0px 0px;
+    text-color: @dim;
+}

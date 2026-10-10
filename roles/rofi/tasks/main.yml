@@ -1,0 +1,25 @@
+---
+- name: Ensure Rofi theme directory exists
+  ansible.builtin.file:
+    path: "{{ user_home }}/.config/rofi/themes"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy Orchestre Dark Rofi theme
+  ansible.builtin.copy:
+    src: themes/orchestre-dark.rasi
+    dest: "{{ user_home }}/.config/rofi/themes/orchestre-dark.rasi"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+
+- name: Select Orchestre Dark for Rofi
+  ansible.builtin.copy:
+    src: config.rasi
+    dest: "{{ user_home }}/.config/rofi/config.rasi"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+    backup: true
