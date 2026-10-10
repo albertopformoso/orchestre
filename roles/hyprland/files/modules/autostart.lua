@@ -12,6 +12,7 @@ return function(apps)
         hl.exec_cmd("hypridle")
         hl.exec_cmd("systemctl --user start hyprpolkitagent")
         hl.exec_cmd("mako")
+        hl.exec_cmd("systemctl --user import-environment HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user restart notification-workspaces.service")
         hl.exec_cmd("waybar")
     end)
 end

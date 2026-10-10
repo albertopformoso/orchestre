@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Focus an existing Zen window when opening an external web link."""
+
+import json
+import os
+import re
+import subprocess
+import sys
+from urllib.parse import urlsplit
+
+
+def focus_browser():
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return
+
+    try:
+        result = subprocess.run(
+            ["hyprctl", "clients", "-j"],
+            check=True, capture_output=True, text=True, timeout=2,
+        )
+        windows = [
+            window for window in json.loads(result.stdout)
+            if window.get("mapped") and not window.get("hidden")
+            and re.fullmatch(r"zen(?:-.*)?|app\.zen_browser\.zen",
+                             window.get("class", ""), re.IGNORECASE)
+            and not window.get("title", "").startswith("Extension: (")
+            and window.get("title", "") != "Picture-in-Picture"
+            and "orchestre-browser-pending" not in window.get("tags", [])
+            and re.fullmatch(r"0x[0-9a-fA-F]+", window.get("address", ""))
+        ]
+        if not windows:
+            return
+
+        def focus_order(window):
+            order = window.get("focusHistoryID", -1)
+            return order if order >= 0 else float("inf")
+
+        window = min(windows, key=focus_order)
+        # Address-based focus also selects the window's workspace/monitor.
+        subprocess.run(
+            ["hyprctl", "dispatch",
+             'hl.dsp.focus({window="address:' + window["address"] + '"})'],
+            check=True, capture_output=True, text=True, timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        # Opening the link still works outside Hyprland or if IPC is unavailable.
+        return
+
+
+def main():
+    urls = sys.argv[1:]
+    try:
+        valid = urls and all(
+            urlsplit(url).scheme.lower() in ("http", "https")
+            and urlsplit(url).netloc for url in urls
+        )
+    except ValueError:
+        valid = False
+    if not valid:
+        print("usage: open-browser-url HTTP_OR_HTTPS_URL [...]", file=sys.stderr)
+        return 2
+
+    focus_browser()
+    # Pass URLs as separate arguments, never through a shell or xdg-open.
+    os.execvp("zen-browser", ["zen-browser", *urls])
+
+
+if __name__ == "__main__":
+    sys.exit(main())

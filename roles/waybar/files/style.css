@@ -1,5 +1,16 @@
-/* Orchestre waybar — simple full-width black top bar.
-   Accent #8CD8DE (matches SDDM), text #f5f5f5. */
+/* Orchestre waybar */
+@import "notification-attention.css";
+
+@define-color surface #141518;
+@define-color surface_flat #0e0f11;
+@define-color ink #f5f6f8;
+@define-color dim #9398a1;
+@define-color dim_empty #6b7079;
+@define-color cyan #22d3ee;
+@define-color blue #60a5fa;
+@define-color green #34d399;
+@define-color amber #f5a524;
+@define-color red #f4505e;
 
 * {
     font-family: "JetBrainsMono Nerd Font", monospace;
@@ -11,8 +22,8 @@
 }
 
 window#waybar {
-    background-color: #000000;
-    color: #f5f5f5eb;
+    background-color: @surface;
+    color: @ink;
 }
 
 /* Modules sit directly on the bar: no per-module backgrounds, just spacing */
@@ -32,63 +43,108 @@ window#waybar {
     margin: 0;
 }
 
-/* --- Workspaces: dots --------------------------------------------------- */
+/* --- Workspaces: app icons, grouped counts, and fallback dots ------------ */
 
 #workspaces button {
     background: transparent;
     border: none;
     padding: 0 5px;
-    color: #9a9aa5;
+    color: @dim;
     transition: color 0.2s ease, text-shadow 0.2s ease;
 }
 
 #workspaces button.active {
-    color: #8cd8de;
+    color: @cyan;
     font-weight: bold;
 }
 
 #workspaces button.empty {
-    color: #585860;
+    color: @dim_empty;
 }
 
 #workspaces button:hover {
-    color: #f5f5f5eb;
+    color: @ink;
     background: transparent;
 }
 
-/* Urgent workspace (e.g. new browser page in background tab): blinking dot */
+/* Native urgency and notification attention share Coucou amber. */
 #workspaces button.urgent {
-    color: #ff6b6b;
-    animation: urgent-blink 1s linear infinite;
+    color: @amber;
+    animation: notification-blink 1s linear infinite;
+}
+
+@keyframes notification-blink {
+    0%   { color: @amber; }
+    50%  { color: alpha(@amber, 0.25); }
+    100% { color: @amber; }
 }
 
 @keyframes urgent-blink {
-    0%   { color: #ff6b6b; }
-    50%  { color: rgba(255, 107, 107, 0.15); }
-    100% { color: #ff6b6b; }
+    0%   { color: @red; }
+    50%  { color: alpha(@red, 0.15); }
+    100% { color: @red; }
 }
 
 /* --- Right side modules -------------------------------------------------- */
 
 #pulseaudio.muted {
-    color: #9a9aa5;
+    color: @dim;
+}
+
+/* Hover drawer: compact volume track matching the bar's cyan accent. */
+#pulseaudio-slider {
+    padding: 0 6px;
+    margin: 0;
+}
+
+#pulseaudio-slider trough {
+    min-width: 100px;
+    min-height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.09);
+    box-shadow: none;
+}
+
+#pulseaudio-slider highlight {
+    min-height: 4px;
+    border-radius: 2px;
+    background: @cyan;
+    box-shadow: none;
+}
+
+#pulseaudio-slider slider {
+    min-width: 8px;
+    min-height: 8px;
+    margin: -2px;
+    border-radius: 50%;
+    background: @cyan;
+    box-shadow: none;
+}
+
+#pulseaudio-slider slider:hover {
+    background: #ffffff;
+}
+
+#pulseaudio-slider.muted highlight,
+#pulseaudio-slider.muted slider {
+    background: @dim;
 }
 
 #network.disconnected,
 #network.disabled {
-    color: #ff6b6b;
+    color: @red;
 }
 
 /* Bluetooth: blue when on, greyed when off/disabled, cyan when connected */
-#bluetooth.on { color: #7db8f0; }
-#bluetooth.connected { color: #8cd8de; }
-#bluetooth.off, #bluetooth.disabled { color: #6a6a74; }
+#bluetooth.on { color: @blue; }
+#bluetooth.connected { color: @cyan; }
+#bluetooth.off, #bluetooth.disabled { color: @dim; }
 
 /* Temperatures: CPU blue, GPU green (custom script with since-boot stats) */
-#custom-cpu { color: #7db8f0; }
-#custom-gpu { color: #82d9a0; }
-#custom-cpu.warning, #custom-gpu.warning { color: #f0c674; }
-#custom-cpu.critical, #custom-gpu.critical { color: #ff5555; animation: urgent-blink 1s linear infinite; }
+#custom-cpu { color: @blue; }
+#custom-gpu { color: @green; }
+#custom-cpu.warning, #custom-gpu.warning { color: @amber; }
+#custom-cpu.critical, #custom-gpu.critical { color: @red; animation: urgent-blink 1s linear infinite; }
 
 #temps #custom-cpu,
 #temps #custom-gpu {
@@ -108,28 +164,28 @@ window#waybar {
 #custom-fan-mode { padding-left: 2px; }
 
 /* Power profiles */
-#custom-power-profile.performance { color: #ff6b6b; }
-#custom-power-profile.balanced { color: #f0c674; }
-#custom-power-profile.power-saver { color: #82d9a0; }
+#custom-power-profile.performance { color: @red; }
+#custom-power-profile.balanced { color: @amber; }
+#custom-power-profile.power-saver { color: @green; }
 
 /* Fan mode: cool blue silent, amber auto, hot red boost (glow grows with
    the state so the mode reads at a glance even when the spin isn't watched) */
-#custom-fan-mode.silent { color: #6f9fff; }
-#custom-fan-mode.auto { color: #f0c674; }
+#custom-fan-mode.silent { color: @blue; }
+#custom-fan-mode.auto { color: @amber; }
 #custom-fan-mode.boost {
-    color: #ff6b6b;
-    text-shadow: 0 0 8px rgba(255, 107, 107, 0.75);
+    color: @red;
+    text-shadow: 0 0 8px alpha(@red, 0.75);
 }
 
 /* Battery: green while charging/plugged/full, amber/red when low */
 #battery.charging,
 #battery.plugged,
-#battery.full { color: #82d9a0; }
-#battery.warning.discharging { color: #f0c674; }
-#battery.critical.discharging { color: #ff6b6b; animation: urgent-blink 1s linear infinite; }
+#battery.full { color: @green; }
+#battery.warning.discharging { color: @amber; }
+#battery.critical.discharging { color: @red; animation: urgent-blink 1s linear infinite; }
 
 #custom-power {
-    color: #f5f5f5eb;
+    color: @ink;
 }
 
 /* Hover: brighten the icon/text instead of painting a background */
@@ -146,14 +202,14 @@ window#waybar {
     background: transparent;
 }
 
-/* Calendar tooltip: keep it dark for readability */
+/* Calendar tooltip */
 tooltip {
-    background-color: #2b2b31f2;
-    border: 1px solid #ffffff26;
+    background-color: @surface_flat;
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 5px;
     padding: 10px;
 }
 
 tooltip label {
-    color: #f5f5f5eb;
+    color: @ink;
 }
