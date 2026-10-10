@@ -1,9 +1,10 @@
-# --- Appearance: glassy + rounded ---
-background-color=#5A5A63E6
-text-color=#f5f5f5eb
-border-color=#ffffff26
+# --- Coucou dark UI (Louis-CFM/coucou, windows/src/style.css) ---
+background-color=#141518
+text-color=#f5f6f8
+border-color=#4b5563
 border-size=1
-border-radius=10
+# Mako draws its own corners; match Hyprland decoration.rounding = 0.
+border-radius=0
 padding=14
 margin=10
 width=340
@@ -23,8 +24,10 @@ markup=1
 # 3. Play a sound when a notification arrives
 on-notify=exec paplay /usr/share/sounds/freedesktop/stereo/window-attention.oga
 
-# 4. Click to invoke the default action (focus window)
+# Keep native actions and their Wayland activation token. The workspace
+# helper observes ActionInvoked and focuses a reliably identified source.
 on-button-left=invoke-default-action
+on-button-right=dismiss
 
 # 5. History limit (for restoring missed notifications)
 max-history=50
@@ -40,15 +43,19 @@ layer=overlay
 
 # --- Urgency-based overrides ---
 [urgency=low]
-border-color=#0000001a
+border-color=#4b5563
 default-timeout=6000
 
 [urgency=normal]
-border-color=#0000001a
+border-color=#f5a524
 default-timeout=8000
 
 [urgency=critical]
-background-color=#ffeeeef2
-border-color=#ff3333ff
-text-color=#cc0000ff
+background-color=#141518
+border-color=#f4505e
+text-color=#ff8d97
 default-timeout=0
+
+# notify-send and other senders without actions still get click-to-focus.
+[!actionable]
+on-button-left=exec "$HOME/.local/bin/notification-workspaces" focus "$id"

@@ -1,0 +1,377 @@
+#!/usr/bin/python3
+"""Mako → Hyprland routing and Waybar attention, without guessing a window.
+
+Observe Notify calls/replies to retain sender PID and notification ID together.
+Do not proxy notifications or store their text. Native Mako actions keep their
+Wayland activation token; ActionInvoked adds explicit compositor focus.
+"""
+
+import collections
+import configparser
+import fcntl
+import json
+import logging
+import os
+from pathlib import Path
+import re
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+from gi.repository import Gio, GLib, GLibUnix
+
+
+LOG = logging.getLogger("notification-workspaces")
+SERVICE = "org.freedesktop.Notifications"
+INTERFACE = SERVICE
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+def hypr(command):
+    result = subprocess.run(["hyprctl", "-j", command], capture_output=True,
+                            text=True, timeout=2, check=True)
+    return json.loads(result.stdout)
+
+
+def identity(window):
+    # stableId guards against reuse of a closed window's address.
+    return (window["address"], window["pid"], window["stableId"])
+
+
+def normalize(value):
+    return str(value).removesuffix(".desktop").casefold()
+
+
+def desktop_aliases():
+    aliases = {}
+    roots = [Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))]
+    roots += [Path(p) for p in os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")]
+    for root in reversed(roots):
+        for path in (root / "applications").glob("*.desktop"):
+            parser = configparser.ConfigParser(interpolation=None, strict=False)
+            try:
+                parser.read(path)
+                entry = parser["Desktop Entry"]
+                aliases[normalize(path.stem)] = {
+                    normalize(v) for v in (path.stem, entry.get("StartupWMClass", "")) if v
+                }
+            except (OSError, KeyError, configparser.Error):
+                continue
+    return aliases
+
+
+def ancestors(pid):
+    """A CLI notifier can be descended from its terminal's window process."""
+    result = []
+    while pid > 1 and pid not in result and len(result) < 64:
+        result.append(pid)
+        try:
+            status = Path(f"/proc/{pid}/status").read_text()
+            pid = int(re.search(r"^PPid:\s+(\d+)", status, re.M)[1])
+        except (OSError, TypeError, ValueError):
+            break
+    return result
+
+
+def resolve_source(app, hints, lineage, windows, aliases):
+    windows = [w for w in windows if w.get("mapped") and "stableId" in w]
+    desktop = normalize(hints.get("desktop-entry", ""))
+    if desktop:
+        names = aliases.get(desktop, {desktop})
+        windows = [w for w in windows if names.intersection(
+            {normalize(w.get("class", "")), normalize(w.get("initialClass", ""))})]
+    # Use the closest process ancestor with windows, never the focused window.
+    for pid in lineage:
+        candidates = [w for w in windows if w.get("pid") == pid]
+        if candidates:
+            return identity(candidates[0]) if len(candidates) == 1 else None
+    names = aliases.get(desktop, {desktop}) if desktop else {normalize(app)}
+    names = names - {"", "notify-send"}
+    candidates = [w for w in windows if names.intersection(
+        {normalize(w.get("class", "")), normalize(w.get("initialClass", ""))})]
+    return identity(candidates[0]) if len(candidates) == 1 else None
+
+
+def focused_workspaces(monitors):
+    for monitor in monitors:
+        if monitor.get("focused"):
+            special = monitor.get("specialWorkspace", {}).get("id", 0)
+            return {special or monitor["activeWorkspace"]["id"]}
+    return set()
+
+
+def attention_css(workspaces, pending):
+    """Waybar: all-outputs=false, show-special=true, magic hidden, sort-by=id.
+
+    The native module has no external urgency setter or per-workspace CSS ID.
+    Match its sorted buttons per output; refresh on workspace topology events.
+    """
+    rules = ["/* Managed at runtime by notification-workspaces. */\n"]
+    monitors = sorted({w["monitor"] for w in workspaces})
+    for monitor in monitors:
+        # CSS identifier escaping, including connectors with punctuation.
+        escaped = "".join(f"\\{ord(c):x} " for c in monitor)
+        ordered = sorted((w for w in workspaces if w["monitor"] == monitor
+                          and w.get("name") not in {"magic", "special:magic"}),
+                         key=lambda w: w["id"])
+        for index, workspace in enumerate(ordered, 1):
+            if workspace["id"] in pending:
+                rules.append(
+                    f"window#waybar.{escaped} #workspaces button:nth-child({index}) "
+                    "{ color: #f5a524; animation: notification-blink 1s linear infinite; }\n")
+    return "".join(rules)
+
+
+class Bridge:
+    def __init__(self):
+        self.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        self.aliases = desktop_aliases()
+        self.calls = {}
+        self.notifications = collections.OrderedDict()
+        self.pending = set()
+        self.css_path = CONFIG / "waybar/notification-attention.css"
+        self.css = None
+        self.loop = GLib.MainLoop()
+        self.stopping = False
+        self.windows = []
+        self.monitors = []
+        self.workspaces = []
+        self.refresh_source = None
+        self.owner = self.dbus_call("GetNameOwner", "(s)", (SERVICE,))[0]
+
+    def dbus_call(self, method, signature, args):
+        return self.bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                                  "org.freedesktop.DBus", method,
+                                  GLib.Variant(signature, args), None,
+                                  Gio.DBusCallFlags.NONE, 1500, None).unpack()
+
+    def refresh(self):
+        if self.refresh_source is not None:
+            GLib.source_remove(self.refresh_source)
+        self.refresh_source = None
+        try:
+            self.windows = hypr("clients")
+            self.monitors = hypr("monitors")
+            self.workspaces = hypr("workspaces")
+            live = {identity(w): w for w in self.windows if "stableId" in w}
+            visited = focused_workspaces(self.monitors)
+            self.pending = {key for key in self.pending if key in live
+                            and live[key]["workspace"]["id"] not in visited
+                            and not live[key].get("pinned")}
+            self.write_css(attention_css(self.workspaces, {
+                live[key]["workspace"]["id"] for key in self.pending}))
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            LOG.warning("Cannot refresh Hyprland state: %s", error)
+        return False
+
+    def write_css(self, text):
+        if text != self.css:
+            self.css_path.parent.mkdir(parents=True, exist_ok=True)
+            # Keep the inode: Waybar watches imported files with Gio.FileMonitor.
+            self.css_path.write_text(text)
+            self.css = text
+
+    def schedule_refresh(self):
+        if self.refresh_source is None:
+            self.refresh_source = GLib.timeout_add(60, self.refresh)
+
+    def focus(self, notification_id):
+        key = self.notifications.get(notification_id)
+        if key is None:
+            return
+        self.refresh()
+        window = next((w for w in self.windows if "stableId" in w and identity(w) == key), None)
+        if window:
+            address = window["address"]
+            if not re.fullmatch(r"0x[0-9a-fA-F]+", address):
+                return
+            subprocess.run(["hyprctl", "eval",
+                            f'hl.dispatch(hl.dsp.focus({{window="address:{address}"}}))'],
+                           capture_output=True, timeout=2, check=True)
+            self.pending.discard(key)
+            self.schedule_refresh()
+
+    def monitor_message(self, connection, message, incoming, data):
+        if incoming:
+            # Gio filters run in a worker thread; process state on GLib's loop.
+            GLib.idle_add(self.handle_message, message.copy())
+            # A monitor must never reply to observed calls. Otherwise GDBus
+            # generates UnknownMethod and the bus disconnects the monitor.
+            if message.get_message_type() == Gio.DBusMessageType.METHOD_CALL:
+                return None
+        return message
+
+    def handle_message(self, message):
+        try:
+            kind = message.get_message_type()
+            member = message.get_member()
+            body = message.get_body()
+            args = body.unpack() if body else ()
+            if (kind == Gio.DBusMessageType.SIGNAL and member == "NameOwnerChanged"
+                    and args[0] == SERVICE):
+                self.owner = args[2]
+                self.calls.clear()
+                self.notifications.clear()
+                self.pending.clear()
+                self.schedule_refresh()
+            elif (kind == Gio.DBusMessageType.METHOD_CALL and member == "Notify"
+                  and message.get_interface() == INTERFACE
+                  and message.get_destination() in (SERVICE, self.owner)):
+                sender = message.get_sender()
+                try:
+                    pid = self.dbus_call("GetConnectionUnixProcessID", "(s)", (sender,))[0]
+                    lineage = ancestors(pid)
+                except GLib.Error:
+                    lineage = []
+                self.refresh()
+                source = resolve_source(args[0], args[6], lineage, self.windows, self.aliases)
+                # Preserve only source identity, not notification titles/bodies.
+                now = time.monotonic()
+                self.calls = {key: value for key, value in self.calls.items() if now - value[1] < 10}
+                self.calls[(sender, message.get_serial())] = (source, now)
+            elif (kind in (Gio.DBusMessageType.METHOD_RETURN, Gio.DBusMessageType.ERROR)
+                  and message.get_sender() == self.owner):
+                call = self.calls.pop((message.get_destination(), message.get_reply_serial()), None)
+                if call and kind == Gio.DBusMessageType.METHOD_RETURN:
+                    notification_id = args[0]
+                    source = call[0]
+                    self.notifications[notification_id] = source
+                    self.notifications.move_to_end(notification_id)
+                    while len(self.notifications) > 256:
+                        self.notifications.popitem(last=False)
+                    if source:
+                        self.pending.add(source)
+                    self.refresh()
+            elif (kind == Gio.DBusMessageType.SIGNAL and message.get_sender() == self.owner
+                  and message.get_interface() == INTERFACE and member == "ActionInvoked"):
+                self.focus(args[0])
+        except (GLib.Error, OSError, ValueError, IndexError, subprocess.SubprocessError):
+            LOG.exception("Notification event failed")
+        return False
+
+    def hypr_event(self, channel, condition):
+        if condition & (GLib.IO_HUP | GLib.IO_ERR):
+            LOG.error("Hyprland event socket disconnected")
+            self.loop.quit()
+            return False
+        try:
+            chunk = self.events.recv(65536)
+            if not chunk:
+                self.loop.quit()
+                return False
+            self.event_buffer += chunk
+            while b"\n" in self.event_buffer:
+                line, self.event_buffer = self.event_buffer.split(b"\n", 1)
+                event, _, payload = line.partition(b">>")
+                if event == b"closewindow":
+                    address = "0x" + payload.decode()
+                    self.pending = {key for key in self.pending if key[0] != address}
+                    for nid, key in self.notifications.items():
+                        if key and key[0] == address:
+                            self.notifications[nid] = None
+                # Refresh immediately so even a brief workspace visit counts.
+                if event in (b"workspacev2", b"focusedmon", b"activespecialv2"):
+                    self.refresh()
+                elif event in (b"openwindow", b"closewindow", b"movewindowv2",
+                               b"createworkspacev2", b"destroyworkspacev2",
+                               b"moveworkspacev2", b"renameworkspace", b"configreloaded",
+                               b"monitoraddedv2", b"monitorremoved", b"pin", b"activewindowv2"):
+                    self.schedule_refresh()
+        except BlockingIOError:
+            pass
+        return True
+
+    def control(self, channel, condition):
+        connection, _ = self.server.accept()
+        with connection:
+            connection.settimeout(1)
+            try:
+                request = connection.recv(64).decode().strip()
+                if request.isdecimal():
+                    self.focus(int(request))
+            except (OSError, ValueError, subprocess.SubprocessError):
+                LOG.exception("Focus request failed")
+        return True
+
+    def run(self, runtime):
+        self.server = socket.socket(socket.AF_UNIX)
+        control_path = runtime / "control.sock"
+        control_path.unlink(missing_ok=True)
+        self.server.bind(str(control_path))
+        self.server.listen(8)
+        GLib.io_add_watch(self.server.fileno(), GLib.IO_IN, self.control)
+
+        self.events = socket.socket(socket.AF_UNIX)
+        signature = os.environ["HYPRLAND_INSTANCE_SIGNATURE"]
+        self.events.connect(str(Path(os.environ["XDG_RUNTIME_DIR"]) / "hypr" / signature / ".socket2.sock"))
+        self.events.setblocking(False)
+        self.event_buffer = b""
+        GLib.io_add_watch(self.events.fileno(), GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, self.hypr_event)
+
+        flags = Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION
+        self.monitor = Gio.DBusConnection.new_for_address_sync(
+            os.environ["DBUS_SESSION_BUS_ADDRESS"], flags, None, None)
+        self.monitor.add_filter(self.monitor_message, None)
+        rules = [
+            f"type='method_call',interface='{INTERFACE}',member='Notify'",
+            # Replies carry no interface; matching the destination pairs serials.
+            f"type='method_return',sender='{SERVICE}'",
+            f"type='error',sender='{SERVICE}'",
+            f"type='signal',interface='{INTERFACE}'",
+            f"type='signal',interface='org.freedesktop.DBus',member='NameOwnerChanged',arg0='{SERVICE}'",
+        ]
+        self.monitor.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                               "org.freedesktop.DBus.Monitoring", "BecomeMonitor",
+                               GLib.Variant("(asu)", (rules, 0)), None,
+                               Gio.DBusCallFlags.NONE, 2000, None)
+        self.monitor.connect("closed", self.disconnected)
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, self.stop)
+        self.refresh()
+        LOG.info("Tracking Mako notifications and Hyprland workspaces")
+        try:
+            self.loop.run()
+        finally:
+            self.write_css(attention_css([], set()))
+            control_path.unlink(missing_ok=True)
+        if not self.stopping:
+            raise RuntimeError("Workspace bridge connection lost")
+
+    def stop(self):
+        self.stopping = True
+        self.loop.quit()
+        return False
+
+    def disconnected(self, connection, remote, error):
+        LOG.error("D-Bus monitor disconnected: %s", error)
+        self.loop.quit()
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
+    runtime = Path(os.environ["XDG_RUNTIME_DIR"]) / "notification-workspaces"
+    if len(sys.argv) == 3 and sys.argv[1] == "focus" and sys.argv[2].isdecimal():
+        try:
+            with socket.socket(socket.AF_UNIX) as client:
+                client.settimeout(2)
+                client.connect(str(runtime / "control.sock"))
+                client.sendall(sys.argv[2].encode())
+        except OSError as error:
+            LOG.warning("Workspace helper unavailable: %s", error)
+        subprocess.run(["makoctl", "dismiss", "-n", sys.argv[2]], check=False)
+    elif sys.argv[1:] == ["serve"]:
+        runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with (runtime / "lock").open("w") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                sys.exit("notification-workspaces is already running")
+            Bridge().run(runtime)
+    else:
+        sys.exit("usage: notification-workspaces {serve|focus ID}")
+
+
+if __name__ == "__main__":
+    main()

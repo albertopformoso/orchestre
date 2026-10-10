@@ -1,0 +1,9 @@
+[Unit]
+Description=Route Mako notifications to Hyprland workspaces
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/notification-workspaces serve
+Restart=on-failure
+RestartSec=2

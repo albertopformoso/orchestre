@@ -7,10 +7,37 @@
     group: "{{ current_user }}"
     mode: '0755'
 
-- name: Copy config files
+- name: Deploy Mako configuration
   ansible.builtin.copy:
-    src: .
-    dest: "/home/{{ current_user }}/.config/mako/"
+    src: config
+    dest: "/home/{{ current_user }}/.config/mako/config"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+
+- name: Ensure notification helper directories exist
+  ansible.builtin.file:
+    path: "/home/{{ current_user }}/{{ item }}"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+  loop:
+    - .local/bin
+    - .config/systemd/user
+
+- name: Deploy notification workspace helper
+  ansible.builtin.copy:
+    src: notification-workspaces
+    dest: "/home/{{ current_user }}/.local/bin/notification-workspaces"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy notification workspace service
+  ansible.builtin.copy:
+    src: notification-workspaces.service
+    dest: "/home/{{ current_user }}/.config/systemd/user/notification-workspaces.service"
     owner: "{{ current_user }}"
     group: "{{ current_user }}"
     mode: '0644'
