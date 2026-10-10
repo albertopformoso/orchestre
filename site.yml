@@ -27,6 +27,7 @@
     - sddm
     - vim
     - hyprland
+    - rofi
     - notifications
     - waybar
 
