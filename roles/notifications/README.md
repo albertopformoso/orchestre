@@ -1,7 +1,5 @@
 # Mako notifications
 
-The theme uses Coucou's dark UI colors from
-https://github.com/Louis-CFM/coucou/blob/main/windows/src/style.css.
 Mako's 0px corner radius and 1px border match the current Hyprland geometry.
 
 `notification-workspaces.service` starts with Hyprland. It observes notification
