@@ -67,6 +67,7 @@
       - hyprpolkitagent
       # Notifications (from the notifications role)
       - mako
+      - python-gobject     # Notification workspace bridge (Gio D-Bus)
       - gdk-pixbuf2
       - papirus-icon-theme
       # Waybar companions (from the waybar role)
@@ -106,9 +107,37 @@
   become: true
   become_user: aur_builder
 
-- name: Remove leftover msi-ec config from a previous manual install (MSI laptops only)
+- name: Ensure msi-ec module loads at boot (MSI laptops only)
+  # msi-ec-dkms-git ships this exact file, but the module has no DMI autoload
+  # and pacman only restores the file on a package reinstall - without it
+  # nothing loads msi_ec at boot and /sys/devices/platform/msi-ec (fan
+  # control) silently disappears after the next reboot. An earlier version
+  # of this role *removed* this file as a "leftover", which broke fan mode
+  # after the following reboot. Deploy it ourselves so the playbook
+  # self-heals and the file always matches what the package ships.
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/msi-ec.conf
+    content: "msi-ec\n"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: is_msi_device
+
+- name: Remove stale msi_ec/0.13 DKMS module from a previous manual install (MSI laptops only)
+  # The old manual msi-ec install registered msi_ec/0.13 in DKMS; on every
+  # kernel upgrade it won the install race against msi-ec/r716 ("already
+  # installed at version 0.13, override by specifying --force"), so the git
+  # module never actually got installed. Unregister it, then delete the tree.
+  ansible.builtin.command: dkms remove msi_ec/0.13 --all
+  become: true
+  when: is_msi_device
+  failed_when: false
+  changed_when: false
+
+- name: Remove leftover msi_ec DKMS source tree from a previous manual install (MSI laptops only)
   ansible.builtin.file:
-    path: /etc/modules-load.d/msi-ec.conf
+    path: /usr/src/msi_ec-0.13
     state: absent
   become: true
   when: is_msi_device
@@ -121,6 +150,18 @@
   become: true
   become_user: aur_builder
   when: is_msi_device
+
+- name: Build msi-ec for every installed kernel (MSI laptops only)
+  # kewlfft.aur with state=present is a no-op for an already-installed
+  # package, so freshly installed kernel variants (e.g. the LTS kernel after
+  # a cleanup) would keep no msi-ec module until their next package upgrade.
+  # dkms autoinstall builds/installs msi-ec for every kernel that has a
+  # module tree; a no-op when everything is already in place.
+  ansible.builtin.command: dkms autoinstall
+  become: true
+  when: is_msi_device
+  changed_when: false
+  failed_when: false
 
 # Start the cursor download now so it runs over the network while the rest of
 # the configuration proceeds; the async_status task at the end of this role

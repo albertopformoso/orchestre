@@ -4,44 +4,80 @@
     "position": "top",
     "height": 22,
     "spacing": 4,
+    "reload_style_on_change": true,
 
     "modules-left": ["hyprland/workspaces"],
-    "modules-right": ["pulseaudio", "network", "bluetooth", "group/temps", "custom/power-profile", "custom/fan-mode", "battery", "clock", "custom/power"],
+    "modules-right": ["group/audio", "network", "bluetooth", "group/temps", "custom/power-profile", "custom/fan-mode", "battery", "clock", "custom/power"],
 
-    // Dynamic workspace dots; clicking focuses the workspace.
+    // App icons per workspace; repeated icons show a window count.
+    // Empty workspaces and unrecognized apps use a dot. Click to focus.
     // The button gets the .urgent class (blinking via style.css) when a
     // window in that workspace demands attention (e.g. new page opened
     // in a background browser tab).
     "hyprland/workspaces": {
-        "format": "{icon}",
+        // Keep these in sync with notification-workspaces' button ordering.
+        "all-outputs": false,
+        "show-special": true,
+        "ignore-workspaces": ["^(special:)?magic$"],
+        "format": "{icon}{windows}",
         "format-icons": {
-            "default": "●",
-            "active": "●",
-            "urgent": "●"
+            "default": "",
+            "empty": "●"
         },
+        "format-window-separator": " ",
+        "window-rewrite-group-threshold": 2,
+        "window-rewrite-group-format": "{icon}×{count}",
         "tooltips": {
             "default": "Workspace {name}\n{windows}",
             "empty": "Workspace {name}"
         },
-        // Unknown window classes fall back to showing their class name
-        // (e.g. "Alacritty") instead of waybar's default "?" placeholder.
-        "window-rewrite-default": "{class}",
+        // Group by displayed icon: apps sharing an icon share its count.
+        "window-rewrite-default": "●",
         "window-rewrite": {
-            "class<firefox>": "󰈹",
-            "class<[Zz]en.*>": "󰈹",
-            "class<Chromium|chrome>": "󰊯",
-            "class<code-oss|Code|VSCodium|Zed>": "󰨞",
-            "class<okular>": "󰈙",
-            "class<ristretto>": "󰋩",
-            "class<Thunar>": "󰉋"
+            "class<([Ff]irefox.*|org.mozilla.firefox|[Zz]en.*|app.zen_browser.zen)>": "󰈹",
+            "class<([Cc]hromium.*|[Cc]hrome.*|[Gg]oogle-chrome.*|com.google.Chrome)>": "󰊯",
+            "class<([Bb]rave.*|com.brave.Browser)>": "󰖟",
+            "class<([Cc]ode.*|[Vv][Ss][Cc]odium.*|[Cc]odium.*|[Zz]ed.*|dev.zed.Zed.*|com.visualstudio.code.*|com.vscodium.codium.*|[Cc]ursor.*|[Ww]indsurf.*|jetbrains-.*|[Ii]dea.*|[Pp]ycharm.*|[Cc]lion.*|[Ww]eb[Ss]torm.*|[Gg]o[Ll]and.*|[Rr]ider.*|[Ee]clipse.*|[Nn]et[Bb]eans.*|[Aa]ndroid-studio.*|[Qq]tcreator.*)>": "󰨞",
+            "class<([Nn]eovim|[Nn]vim|neovide)>": "",
+            "class<([Vv]im|[Gg]vim)>": "",
+            "class<([Ee]macs.*)>": "",
+            "class<([Aa]lacritty|[Kk]itty|[Ff]oot.*|org.wezfurlong.wezterm|[Ww]ezterm.*|com.mitchellh.ghostty|[Gg]hostty|[Kk]onsole|org.kde.konsole|[Gg]nome-terminal.*|org.gnome.Terminal|org.gnome.Ptyxis|[Xx]fce4-terminal|[Xx][Tt]erm|bluetui)>": "",
+            "class<([Oo]kular|org.kde.okular|org.gnome.Evince|[Ee]vince|org.pwmt.zathura|[Zz]athura)>": "󰈙",
+            "class<([Rr]istretto|org.gnome.Loupe|org.gnome.eog|[Ss]xiv|[Ii]mV|imv)>": "󰋩",
+            "class<([Tt]hunar|[Nn]autilus|org.gnome.Nautilus|[Dd]olphin|org.kde.dolphin|[Nn]emo|[Pp]cmanfm.*)>": "󰉋",
+            "class<([Dd]iscord.*|[Vv]esktop|dev.vencord.Vesktop|com.discordapp.Discord)>": "󰙯",
+            "class<([Ss]potify|com.spotify.Client)>": "",
+            "class<([Ss]team|steam_app_.*|com.valvesoftware.Steam)>": "",
+            "class<([Vv]lc|org.videolan.VLC|[Mm]pv)>": "󰕼",
+            "class<([Pp]avucontrol|org.pulseaudio.pavucontrol)>": "󰕾",
+            "class<([Kk][Cc]alc|org.kde.kcalc)>": "",
+            "class<([Oo]bsidian|md[.]obsidian[.]Obsidian)>": "",
+            "class<([Ff]ree[Cc][Aa][Dd]|org[.]freecad[.]FreeCAD)>": "",
+            "class<([Mm]ission[Cc]enter|mission-center|io[.]missioncenter[.]MissionCenter)>": "󰨇"
         },
         "on-click": "activate",
         "on-click-middle": "close",
         "sort-by": "id"
     },
 
-    // Left-click: floating mixer (pavucontrol, floated by a Hyprland rule).
-    // Right-click: mute toggle. Scroll: volume up/down.
+    // Hover the volume module to reveal a slider to its right.
+    "group/audio": {
+        "orientation": "inherit",
+        "drawer": {
+            "transition-duration": 250,
+            "transition-left-to-right": true
+        },
+        "modules": ["pulseaudio", "pulseaudio/slider"]
+    },
+
+    "pulseaudio/slider": {
+        "min": 0,
+        "max": 100,
+        "orientation": "horizontal"
+    },
+
+    // Left-click: mute toggle. Scroll: volume up/down.
+    // Right-click: floating mixer (pavucontrol, floated by a Hyprland rule).
     "pulseaudio": {
         "format": "{icon} {volume}%",
         "format-muted": "󰝟 muted",
@@ -50,8 +86,8 @@
         },
         "scroll-step": 5,
         "max-volume": 100,
-        "on-click": "pavucontrol",
-        "on-click-right": "pactl set-sink-mute @DEFAULT_SINK@ toggle",
+        "on-click": "pactl set-sink-mute @DEFAULT_SINK@ toggle",
+        "on-click-right": "pavucontrol",
         "tooltip-format": "{desc}\nVolume: {volume}%"
     },
 
@@ -179,11 +215,11 @@
             "first-day-of-week": 1,
             "on-scroll": 1,
             "format": {
-                "months":   "<span color='#8cd8de'><b>{}</b></span>",
-                "weekdays": "<span color='#9a9aa5'><b>{}</b></span>",
-                "weeks":    "<span color='#6c6c78'><b>W{}</b></span>",
-                "days":     "<span color='#e8e8ec'>{}</span>",
-                "today":    "<span color='#8cd8de'><b><u>{}</u></b></span>"
+                "months":   "<span color='#22d3ee'><b>{}</b></span>",
+                "weekdays": "<span color='#9398a1'><b>{}</b></span>",
+                "weeks":    "<span color='#6b7079'><b>W{}</b></span>",
+                "days":     "<span color='#f5f6f8'>{}</span>",
+                "today":    "<span color='#22d3ee'><b><u>{}</u></b></span>"
             }
         },
         "actions": {
