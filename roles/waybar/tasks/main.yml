@@ -310,6 +310,23 @@
     group: "{{ current_user }}"
     mode: '0644'
     directory_mode: '0755'
+  register: wlogout_config
+
+- name: Check for wlogout pointer-focus module
+  ansible.builtin.stat:
+    path: "{{ user_home }}/.config/wlogout/focus.so"
+  register: wlogout_focus_module
+
+- name: Build wlogout pointer-focus module
+  ansible.builtin.shell: >-
+    cc -shared -fPIC -O2 -Wall -Wextra
+    $(pkg-config --cflags gtk+-3.0)
+    {{ (user_home ~ '/.config/wlogout/focus.c') | quote }}
+    -o {{ (user_home ~ '/.config/wlogout/focus.so') | quote }}
+    $(pkg-config --libs gtk+-3.0)
+  become: true
+  become_user: "{{ current_user }}"
+  when: wlogout_config.changed or not wlogout_focus_module.stat.exists
 
 - name: Deploy power profile switcher script (powerprofilesctl + MSI EC sync)
   ansible.builtin.copy:

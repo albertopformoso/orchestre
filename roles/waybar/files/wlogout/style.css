@@ -1,8 +1,10 @@
-/* Tall-tile layout inspired by prasanthrangan/hyprdots wlogout/style_1.css.
- * Self-contained Orchestre palette; icons are relative to this stylesheet. */
+/* Orchestre palette, with muted tiles until selected. */
 @define-color ink #f5f6f8;
+@define-color dim #9398a1;
+@define-color surface #202124;
 @define-color cyan #22d3ee;
 @define-color blue #60a5fa;
+@define-color green #34d399;
 @define-color amber #fbbf24;
 @define-color red #f4505e;
 
@@ -19,66 +21,66 @@ window {
 }
 
 button {
-    color: @ink;
-    background-color: rgba(20, 21, 24, 0.92);
+    color: @dim;
+    background-color: @surface;
     background-repeat: no-repeat;
     background-position: center;
-    background-size: 32%;
+    background-size: 64px 64px;
     border: 2px solid transparent;
-    border-radius: 0;
+    border-radius: 3px;
     outline-style: none;
     margin: 18px 0;
     padding: 18px 8px;
-    transition: all 250ms ease-in-out;
+    transition: background-color 150ms ease-in-out, color 150ms ease-in-out;
 }
 
 #lock {
     background-image: url("icons/lock.svg");
-    background-color: rgba(19, 46, 53, 0.94);
-    border-radius: 24px 0 0 24px;
+    background-color: mix(@surface, @cyan, 0.035);
 }
 
 #suspend {
     background-image: url("icons/suspend.svg");
-    background-color: rgba(26, 37, 57, 0.94);
+    background-color: mix(@surface, @blue, 0.035);
 }
 
 #reboot {
     background-image: url("icons/reboot.svg");
-    background-color: rgba(51, 42, 26, 0.94);
+    background-color: mix(@surface, @amber, 0.035);
 }
 
 #shutdown {
     background-image: url("icons/shutdown.svg");
-    background-color: rgba(53, 28, 34, 0.94);
-    border-radius: 0 24px 24px 0;
+    background-color: mix(@surface, @red, 0.035);
 }
 
-button:hover,
+/* The scoped GTK module moves focus on pointer entry. Styling focus alone
+ * gives keyboard and mouse navigation the same single selected tile. */
 button:focus {
-    background-size: 40%;
-    border-radius: 24px;
+    color: @ink;
     margin: 0;
 }
 
-#lock:hover, #lock:focus {
-    border-radius: 24px;
-    background-color: rgba(22, 104, 119, 0.98);
+#lock:focus {
+    background-image: url("icons/lock-active.svg");
+    background-color: mix(@surface, @cyan, 0.28);
     border-color: @cyan;
 }
 
-#suspend:hover, #suspend:focus {
-    background-color: rgba(43, 79, 133, 0.98);
+#suspend:focus {
+    background-image: url("icons/suspend-active.svg");
+    background-color: mix(@surface, @blue, 0.28);
     border-color: @blue;
 }
 
-#reboot:hover, #reboot:focus {
-    background-color: rgba(122, 85, 27, 0.98);
+#reboot:focus {
+    background-image: url("icons/reboot-active.svg");
+    background-color: mix(@surface, @amber, 0.28);
     border-color: @amber;
 }
 
-#shutdown:hover, #shutdown:focus {
-    border-radius: 24px;
-    background-color: rgba(140, 44, 58, 0.98);
+#shutdown:focus {
+    background-image: url("icons/shutdown-active.svg");
+    background-color: mix(@surface, @red, 0.28);
     border-color: @red;
 }

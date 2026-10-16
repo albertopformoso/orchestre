@@ -24,6 +24,7 @@ print(max(0, (width - min(1000, int(width * 0.84))) // 2),
 ')
 
 config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/wlogout"
+export GTK_MODULES="${GTK_MODULES:+$GTK_MODULES:}$config_dir/focus.so"
 # Keep repeated clicks/key presses from opening overlapping menus. --close
 # prevents power actions from inheriting the lock descriptor.
 exec flock --nonblock --close "${XDG_RUNTIME_DIR:?}/orchestre-power-menu.lock" \
