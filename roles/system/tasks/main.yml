@@ -67,6 +67,9 @@
       - hyprpolkitagent
       # Notifications (from the notifications role)
       - mako
+      - libpulse           # paplay for notification sounds (also works with PipeWire-Pulse)
+      - libnotify          # notify-send for battery alerts and terminal tests
+      - sound-theme-freedesktop # System warning sound for low-battery alerts
       - python-gobject     # Notification workspace bridge (Gio D-Bus)
       - gdk-pixbuf2
       - papirus-icon-theme
@@ -163,20 +166,6 @@
   changed_when: false
   failed_when: false
 
-# Start the cursor download now so it runs over the network while the rest of
-# the configuration proceeds; the async_status task at the end of this role
-# waits for it. (unarchive doesn't support async, so download and extract are
-# split: get_url fetches the tarball async, extraction happens at the end.)
-- name: Download Bibata cursor theme tarball (async)
-  ansible.builtin.get_url:
-    url: "https://github.com/ful1e5/Bibata_Cursor/releases/latest/download/Bibata-Modern-Classic.tar.xz"
-    dest: /var/tmp/Bibata-Modern-Classic.tar.xz
-    mode: '0644'
-  become: true
-  async: 600
-  poll: 0
-  register: bibata_download
-
 - name: Ensure local icons directory exists
   ansible.builtin.file:
     path: "{{ ansible_facts['user_dir'] }}/.local/share/icons"
@@ -207,19 +196,9 @@
     enabled: true
     state: started
 
-- name: Ensure system-wide icons directory exists
-  ansible.builtin.file:
-    path: /usr/share/icons/default
-    state: directory
-    mode: '0755'
-  become: true
-
-- name: Configure system-wide default cursor theme
-  ansible.builtin.copy:
-    src: index.theme
-    dest: /usr/share/icons/default/index.theme
-    mode: '0644'
-  become: true
+- name: Install and configure cursors
+  ansible.builtin.import_tasks: cursors.yml
+  tags: cursors
 
 - name: Apply dark theme for GTK apps
   ansible.builtin.copy:
@@ -284,17 +263,3 @@
     mode: '0440'
     validate: /usr/sbin/visudo -cf %s
   when: is_msi_device
-
-- name: Wait for Bibata cursor theme download to finish
-  ansible.builtin.async_status:
-    jid: "{{ bibata_download.ansible_job_id }}"
-  register: bibata_result
-  until: bibata_result.finished
-  retries: 60
-  delay: 10
-
-- name: Extract Bibata cursor theme to system-wide directory
-  ansible.builtin.unarchive:
-    src: /var/tmp/Bibata-Modern-Classic.tar.xz
-    dest: "/usr/share/icons/"
-  become: true

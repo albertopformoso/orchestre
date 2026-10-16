@@ -5,6 +5,7 @@
 
   pre_tasks:
     - name: Determine the non-root username running the script
+      tags: always
       ansible.builtin.set_fact:
         current_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
 

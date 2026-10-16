@@ -2,6 +2,55 @@
 
 Mako's 0px corner radius and 1px border match the current Hyprland geometry.
 
+## Notification sounds
+
+Every arriving notification plays a sound via `paplay` (provided by `libpulse`).
+The role installs PCM WAV files into `~/.local/share/sounds/orchestre/`.
+The original Universfield MP3 downloads are kept in `files/sounds/source/`;
+the WAV copies are bundled so deployment does not need FFmpeg or Downloads.
+
+| Type | Urgency / color | Sound | Source |
+| --- | --- | --- | --- |
+| Normal | `low` / gray | `normal.wav` | `universfield-new-notification-059-494262.mp3` |
+| Warning | `normal` / yellow | `warning.wav` | `universfield-new-notification-056-494256.mp3` |
+| Error | `critical` / red | `error.wav` | `universfield-new-notification-035-485894.mp3` |
+| Low battery | normal or critical | `dialog-warning.oga` | System `sound-theme-freedesktop` package |
+
+Both low-battery levels use `/usr/share/sounds/freedesktop/stereo/dialog-warning.oga`.
+The original cork-pop download is retained in `files/sounds/source/` as an unused option.
+
+Most applications send normal urgency, which uses the yellow warning style.
+Waybar marks its 30% and 15% discharging alerts with category
+`device.battery.low`. This category overrides the urgency sound, so only the
+battery sound plays; colors and timeouts still follow urgency. Battery-full
+notifications keep the normal-urgency sound.
+
+Run these individually in your desktop terminal (`notify-send` is from `libnotify`):
+
+```sh
+notify-send -u low 'Normal notification' 'Testing the normal sound'
+notify-send -u normal 'Warning notification' 'Testing the warning sound'
+notify-send -u critical 'Error notification' 'Testing the error sound'
+notify-send -u normal -c device.battery.low 'Low battery' 'Testing the battery sound'
+notify-send -u critical -c device.battery.low 'Very low battery' 'Testing the battery sound'
+```
+
+These simulate notifications without changing the battery state. Critical
+notifications stay visible until dismissed (right-click). To test audio alone:
+
+```sh
+paplay "$HOME/.local/share/sounds/orchestre/normal.wav"
+```
+
+To regenerate a WAV after replacing a source file, from the repository root:
+
+```sh
+ffmpeg -i roles/notifications/files/sounds/source/universfield-new-notification-059-494262.mp3 \
+  -map_metadata -1 -c:a pcm_s16le roles/notifications/files/sounds/normal.wav
+```
+
+## Workspace integration
+
 `notification-workspaces.service` starts with Hyprland. It observes notification
 calls and replies on the user D-Bus, correlates the returned ID with the sender,
 and tracks windows through Hyprland's event socket. Notification text is neither

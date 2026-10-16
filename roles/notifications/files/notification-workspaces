@@ -120,7 +120,7 @@ def attention_css(workspaces, pending):
             if workspace["id"] in pending:
                 rules.append(
                     f"window#waybar.{escaped} #workspaces button:nth-child({index}) "
-                    "{ color: #f5a524; animation: notification-blink 1s linear infinite; }\n")
+                    "{ color: #fbbf24; animation: notification-blink 1s linear infinite; }\n")
     return "".join(rules)
 
 

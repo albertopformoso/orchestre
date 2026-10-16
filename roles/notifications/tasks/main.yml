@@ -1,4 +1,29 @@
 ---
+- name: Ensure notification sound directory exists
+  ansible.builtin.file:
+    path: "/home/{{ current_user }}/.local/share/sounds/orchestre"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy notification sounds
+  ansible.builtin.copy:
+    src: "sounds/{{ item }}.wav"
+    dest: "/home/{{ current_user }}/.local/share/sounds/orchestre/{{ item }}.wav"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+  loop:
+    - normal
+    - warning
+    - error
+
+- name: Remove obsolete custom battery sound
+  ansible.builtin.file:
+    path: "/home/{{ current_user }}/.local/share/sounds/orchestre/battery-low.wav"
+    state: absent
+
 - name: Ensure mako config directory exists
   ansible.builtin.file:
     path: "/home/{{ current_user }}/.config/mako"
