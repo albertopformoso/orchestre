@@ -12,7 +12,7 @@ choice="$(printf '%s\n' \
         -theme-str 'window { width: 18em; } listview { lines: 4; }')"
 
 case "$choice" in
-    *Lock*)     hyprlock ;;
+    *Lock*)     hyprlock -c "$HOME/.config/hypr/hyprlock/hyprlock.conf" ;;
     *Suspend*)  systemctl suspend ;;
     *Reboot*)   systemctl reboot ;;
     *Power*)    systemctl poweroff ;;

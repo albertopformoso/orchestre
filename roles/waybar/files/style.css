@@ -1,15 +1,15 @@
 /* Orchestre waybar */
 @import "notification-attention.css";
 
-@define-color surface #141518;
-@define-color surface_flat #0e0f11;
+@define-color surface alpha(#141518, 0.8);
+@define-color surface_flat alpha(#0e0f11, 0.9);
 @define-color ink #f5f6f8;
 @define-color dim #9398a1;
 @define-color dim_empty #6b7079;
 @define-color cyan #22d3ee;
 @define-color blue #60a5fa;
 @define-color green #34d399;
-@define-color amber #f5a524;
+@define-color amber #fbbf24;
 @define-color red #f4505e;
 
 * {
@@ -24,6 +24,7 @@
 window#waybar {
     background-color: @surface;
     color: @ink;
+    border-radius: 2px;
 }
 
 /* Modules sit directly on the bar: no per-module backgrounds, just spacing */
@@ -45,9 +46,21 @@ window#waybar {
 
 /* --- Workspaces: app icons, grouped counts, and fallback dots ------------ */
 
+/* A short translucent hairline separates power from the workspace icons. */
+#custom-power {
+    padding-right: 5px;
+    margin: 5px 0;
+    border-right: 1px solid alpha(@ink, 0.18);
+}
+
+#workspaces {
+    padding-left: 0;
+}
+
 #workspaces button {
     background: transparent;
     border: none;
+    min-width: 0;
     padding: 0 5px;
     color: @dim;
     transition: color 0.2s ease, text-shadow 0.2s ease;
@@ -185,11 +198,17 @@ window#waybar {
 #battery.critical.discharging { color: @red; animation: urgent-blink 1s linear infinite; }
 
 #custom-power {
-    color: @ink;
+    padding-right: 10px;
+    margin: 5px 0;
+    color: @dim;
+}
+
+#custom-power:hover {
+    color: #ffffff;
+    background: transparent;
 }
 
 /* Hover: brighten the icon/text instead of painting a background */
-#custom-power:hover,
 #bluetooth:hover,
 #temps:hover,
 #pulseaudio:hover,
@@ -206,7 +225,7 @@ window#waybar {
 tooltip {
     background-color: @surface_flat;
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 5px;
+    border-radius: 2px;
     padding: 10px;
 }
 

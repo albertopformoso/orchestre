@@ -15,6 +15,29 @@
     group: "{{ current_user }}"
     mode: '0644'
 
+- name: Deploy Hyprland cursor configuration
+  tags: cursors
+  block:
+    - name: Ensure Hyprland modules directory exists
+      ansible.builtin.file:
+        path: "/home/{{ current_user }}/.config/hypr/modules"
+        state: directory
+        owner: "{{ current_user }}"
+        group: "{{ current_user }}"
+        mode: '0755'
+
+    - name: Copy Hyprland settings and cursor startup command
+      ansible.builtin.copy:
+        src: "modules/{{ item }}"
+        dest: "/home/{{ current_user }}/.config/hypr/modules/{{ item }}"
+        owner: "{{ current_user }}"
+        group: "{{ current_user }}"
+        mode: '0644'
+        backup: true
+      loop:
+        - settings.lua
+        - autostart.lua
+
 - name: Deploy hypridle.conf from template (adds MSI-only keyboard listener)
   ansible.builtin.template:
     src: hypridle.conf.j2
