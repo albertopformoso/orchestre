@@ -21,8 +21,8 @@ icon-path=/usr/share/icons/Papirus:/usr/share/icons/Adwaita:/usr/share/icons/hic
 markup=1
 
 # --- Actions & Sound ---
-# 3. Play a sound when a notification arrives
-on-notify=exec paplay /usr/share/sounds/freedesktop/stereo/window-attention.oga
+# Default sound; urgency and battery rules below override this binding.
+on-notify=exec paplay "$HOME/.local/share/sounds/orchestre/normal.wav"
 
 # Keep native actions and their Wayland activation token. The workspace
 # helper observes ActionInvoked and focuses a reliably identified source.
@@ -47,14 +47,21 @@ border-color=#4b5563
 default-timeout=6000
 
 [urgency=normal]
-border-color=#f5a524
+border-color=#fbbf24
 default-timeout=8000
+on-notify=exec paplay "$HOME/.local/share/sounds/orchestre/warning.wav"
 
 [urgency=critical]
 background-color=#141518
 border-color=#f4505e
 text-color=#ff8d97
 default-timeout=0
+on-notify=exec paplay "$HOME/.local/share/sounds/orchestre/error.wav"
+
+# Last matching sound binding wins: battery alerts play only this sound,
+# while retaining their urgency's colors and timeout.
+[category=device.battery.low]
+on-notify=exec paplay /usr/share/sounds/freedesktop/stereo/dialog-warning.oga
 
 # notify-send and other senders without actions still get click-to-focus.
 [!actionable]

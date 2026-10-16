@@ -11,6 +11,7 @@ return function(apps)
     hl.bind(secndMod .. " + SPACE", hl.dsp.exec_cmd(apps.runner))
 
     hl.bind(mainMod .. " + Q", hl.dsp.window.close())
+    hl.bind(mainMod .. " + Delete", hl.dsp.exec_cmd("waybar-power-menu"))
     hl.bind(secndMod .. " + Q", hl.dsp.exec_cmd("hyprlock -c ~/.config/hypr/hyprlock/hyprlock.conf"))
     hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("command -v hyprshutdown >/dev/null 2>&1 && hyprshutdown || hyprctl dispatch 'hl.dsp.exit()'"))
     hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))

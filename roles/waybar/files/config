@@ -3,11 +3,15 @@
     "layer": "top",
     "position": "top",
     "height": 22,
+    "margin-top": 1,
+    "margin-left": 1,
+    "margin-right": 1,
+    "margin-bottom": 0,
     "spacing": 4,
     "reload_style_on_change": true,
 
-    "modules-left": ["hyprland/workspaces"],
-    "modules-right": ["group/audio", "network", "bluetooth", "group/temps", "custom/power-profile", "custom/fan-mode", "battery", "clock", "custom/power"],
+    "modules-left": ["custom/power", "hyprland/workspaces"],
+    "modules-right": ["group/audio", "network", "bluetooth", "group/temps", "custom/power-profile", "custom/fan-mode", "battery", "clock"],
 
     // App icons per workspace; repeated icons show a window count.
     // Empty workspaces and unrecognized apps use a dot. Click to focus.
@@ -198,8 +202,8 @@
         },
         "tooltip-format": "{timeTo}\nCapacity: {capacity}%\nPower: {power:.1f} W",
         "events": {
-            "on-discharging-warning": "notify-send -u normal 'Low battery' 'Battery below 30%'",
-            "on-discharging-critical": "notify-send -u critical 'Very low battery' 'Battery below 15%'",
+            "on-discharging-warning": "notify-send -u normal -c device.battery.low 'Low battery' 'Battery below 30%'",
+            "on-discharging-critical": "notify-send -u critical -c device.battery.low 'Very low battery' 'Battery below 15%'",
             "on-charging-100": "notify-send -u normal 'Battery full' 'Plug can be removed'"
         }
     },

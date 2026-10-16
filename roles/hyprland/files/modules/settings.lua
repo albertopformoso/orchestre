@@ -18,6 +18,9 @@ hl.env("QT_STYLE_OVERRIDE", "kvantum")
 
 -- Refer to https://wiki.hypr.land/Configuring/Basics/Variables/
 hl.config({
+    -- Bibata ships Xcursor images; use them for the compositor cursor too.
+    cursor = { enable_hyprcursor = false },
+
     general = {
         gaps_in  = 1,
         gaps_out = 1,

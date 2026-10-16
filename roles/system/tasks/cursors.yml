@@ -1,0 +1,91 @@
+---
+- name: Ensure system-wide default cursor directory exists
+  ansible.builtin.file:
+    path: /usr/share/icons/default
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Install bundled Bibata cursor theme
+  ansible.builtin.unarchive:
+    src: Bibata-Modern-Classic.tar.xz
+    dest: /usr/share/icons/
+    owner: root
+    group: root
+  become: true
+
+- name: Configure system-wide default cursor theme
+  ansible.builtin.copy:
+    src: index.theme
+    dest: /usr/share/icons/default/index.theme
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+- name: Ensure GTK configuration directories exist
+  ansible.builtin.file:
+    path: "/home/{{ current_user }}/.config/{{ item }}"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+  loop:
+    - gtk-3.0
+    - gtk-4.0
+
+- name: Configure GTK 2 cursor theme and size
+  ansible.builtin.lineinfile:
+    path: "/home/{{ current_user }}/.gtkrc-2.0"
+    regexp: '^\s*{{ item.key }}\s*='
+    line: '{{ item.key }}={{ item.value }}'
+    create: true
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+    backup: true
+  loop:
+    - { key: gtk-cursor-theme-name, value: '"Bibata-Modern-Classic"' }
+    - { key: gtk-cursor-theme-size, value: '14' }
+
+- name: Configure GTK 3 and GTK 4 cursor theme and size
+  community.general.ini_file:
+    path: "/home/{{ current_user }}/.config/{{ item.0 }}/settings.ini"
+    section: Settings
+    option: "{{ item.1.key }}"
+    value: "{{ item.1.value }}"
+    no_extra_spaces: true
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+    backup: true
+  loop: "{{ ['gtk-3.0', 'gtk-4.0'] | product(cursor_gtk_settings) | list }}"
+  vars:
+    cursor_gtk_settings:
+      - { key: gtk-cursor-theme-name, value: Bibata-Modern-Classic }
+      - { key: gtk-cursor-theme-size, value: '14' }
+
+- name: Read desktop cursor settings
+  ansible.builtin.command:
+    argv: [gsettings, get, org.gnome.desktop.interface, "{{ item.key }}"]
+  loop:
+    - { key: cursor-theme, value: "'Bibata-Modern-Classic'" }
+    - { key: cursor-size, value: '14' }
+  register: desktop_cursor_settings
+  changed_when: false
+  check_mode: false
+  become: true
+  become_user: "{{ current_user }}"
+
+- name: Set desktop cursor theme and size
+  ansible.builtin.command:
+    argv: [dbus-run-session, --, gsettings, set, org.gnome.desktop.interface, "{{ item.item.key }}", "{{ item.item.value }}"]
+  loop: "{{ desktop_cursor_settings.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when: item.stdout | trim != item.item.value
+  changed_when: true
+  become: true
+  become_user: "{{ current_user }}"
