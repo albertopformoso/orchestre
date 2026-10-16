@@ -217,6 +217,7 @@
 
 # Scripts
 - name: Ensure local bin directory exists
+  tags: sddm
   ansible.builtin.file:
     path: "/home/{{ current_user }}/.local/bin"
     state: directory
@@ -225,6 +226,7 @@
     mode: '0755'
 
 - name: Background script
+  tags: sddm
   ansible.builtin.copy:
     src: scripts/{{ item }}.sh
     dest: "/home/{{ current_user }}/.local/bin/{{ item }}"
