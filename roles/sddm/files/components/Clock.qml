@@ -9,7 +9,7 @@ Item {
     property color baseAccent: config.accentColor
     property string fontFamily: "Google Sans Flex"
 
-    property color textColor: '#e8939497'
+    property color textColor: '#e89398a1'
     property string clockFontFamily: "Google Sans Flex Medium Rounded"
 
     property string hourStr: ""

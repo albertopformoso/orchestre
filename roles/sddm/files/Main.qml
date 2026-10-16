@@ -16,12 +16,13 @@ Rectangle {
     property int sessionIndex: 0
     property bool isLoggingIn: false
 
-    // Glass palette
-    property color glassFill: Qt.rgba(1, 1, 1, 0.08)
-    property color glassFillHover: Qt.rgba(1, 1, 1, 0.14)
-    property color glassBorder: Qt.rgba(1, 1, 1, 0.15)
-    property color textPrimary: Qt.rgba(1, 1, 1, 0.92)
-    property color textSecondary: Qt.rgba(1, 1, 1, 0.55)
+    // Dark glass over the blurred wallpaper, with quiet grayscale controls.
+    readonly property int cornerRadius: 3
+    readonly property color surface: Qt.rgba(0.08, 0.08, 0.09, 0.38)
+    readonly property color surfaceHover: Qt.rgba(1, 1, 1, 0.12)
+    readonly property color surfaceBorder: Qt.rgba(1, 1, 1, 0.18)
+    readonly property color textPrimary: "#f5f6f8"
+    readonly property color textSecondary: "#9398a1"
 
     Component.onCompleted: {
         if (typeof userModel !== "undefined" && userModel.lastIndex >= 0) userIndex = userModel.lastIndex;
@@ -106,9 +107,13 @@ Rectangle {
 
     Image {
         id: backgroundImage
-        source: config.background
+        source: config.syncedBackground || config.background
         anchors.fill: parent
         fillMode: Image.PreserveAspectCrop
+        onStatusChanged: {
+            if (status === Image.Error && source.toString() !== Qt.resolvedUrl(config.background).toString())
+                source = Qt.resolvedUrl(config.background);
+        }
     }
 
     // High-Quality Standalone Blur (Qt6 Native)
@@ -141,11 +146,13 @@ Rectangle {
         }
         z: 100
         opacity: 1
+        textColor: container.textSecondary
+        activeTextColor: "#ffffff"
     }
 
     Shortcut {
         sequence: "Escape"
-        enabled: loginState.visible
+        enabled: loginState.visible && !userPopup.visible && !sessionPopup.visible
         onActivated: {
             loginState.visible = false;
             loginState.isError = false;
@@ -156,7 +163,7 @@ Rectangle {
 
     Shortcut {
         sequences: ["Return", "Enter"]
-        enabled: loginState.visible
+        enabled: loginState.visible && !container.isLoggingIn && !userPopup.visible && !sessionPopup.visible
         onActivated: container.doLogin()
     }
 
@@ -228,10 +235,10 @@ Rectangle {
         SequentialAnimation {
             id: shakeAnimation
             loops: 2
-            PropertyAnimation { target: loginCard; property: "x"; from: (parent.width - loginCard.width)/2; to: (parent.width - loginCard.width)/2 - 10; duration: 50; easing.type: Easing.InOutQuad }
-            PropertyAnimation { target: loginCard; property: "x"; from: (parent.width - loginCard.width)/2 - 10; to: (parent.width - loginCard.width)/2 + 10; duration: 50; easing.type: Easing.InOutQuad }
-            PropertyAnimation { target: loginCard; property: "x"; from: (parent.width - loginCard.width)/2 + 10; to: (parent.width - loginCard.width)/2; duration: 50; easing.type: Easing.InOutQuad }
-            onStopped: isError = false
+            PropertyAnimation { target: loginCard; property: "x"; from: (loginState.width - loginCard.width)/2; to: (loginState.width - loginCard.width)/2 - 10; duration: 50; easing.type: Easing.InOutQuad }
+            PropertyAnimation { target: loginCard; property: "x"; from: (loginState.width - loginCard.width)/2 - 10; to: (loginState.width - loginCard.width)/2 + 10; duration: 50; easing.type: Easing.InOutQuad }
+            PropertyAnimation { target: loginCard; property: "x"; from: (loginState.width - loginCard.width)/2 + 10; to: (loginState.width - loginCard.width)/2; duration: 50; easing.type: Easing.InOutQuad }
+            onStopped: loginState.isError = false
         }
 
         Rectangle {
@@ -240,21 +247,10 @@ Rectangle {
             height: 480 + (numLockIndicator.visible ? 40 : 0)
             x: (parent.width - width) / 2
             y: (parent.height - height) / 2
-            color: loginState.isError ? Qt.rgba(0.25, 0.05, 0.05, 0.45) : container.glassFill
+            color: container.surface
             opacity: 1.0
-            border.color: container.glassBorder
-            border.width: 1
-            radius: 16
-
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: Qt.rgba(0, 0, 0, 0.4)
-                shadowBlur: 0.2
-                shadowVerticalOffset: 3
-                shadowHorizontalOffset: 0
-                blurMax: 8
-            }
+            border.width: 0
+            radius: container.cornerRadius
 
             Behavior on color { ColorAnimation { duration: 200 } }
             Behavior on height { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
@@ -265,9 +261,6 @@ Rectangle {
                 anchors.margins: 40
                 spacing: 15
 
-                // Swapped directly to instant opacity shift
-                opacity: (userPopup.opened || (typeof sessionPopup !== "undefined" && sessionPopup.opened)) ? 0.20 : 1.0
-
                 Item {
                     Layout.preferredWidth: 120
                     Layout.preferredHeight: 120
@@ -276,7 +269,7 @@ Rectangle {
                     Rectangle {
                         id: avatarFallback
                         anchors.fill: parent
-                        color: container.glassFill
+                        color: container.surfaceHover
                         radius: width / 2
                         visible: avatar.status !== Image.Ready
 
@@ -309,7 +302,7 @@ Rectangle {
                             var ctx = getContext("2d");
                             ctx.reset();
                             ctx.beginPath();
-                            ctx.arc(width/2, height/2, width/2, 0, 2 * Math.PI);
+                            ctx.arc(width / 2, height / 2, width / 2, 0, 2 * Math.PI);
                             ctx.closePath();
                             ctx.clip();
                             ctx.drawImage(avatar, 0, 0, width, height);
@@ -372,6 +365,7 @@ Rectangle {
                 }
 
                 Item {
+                    id: userSelector
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredWidth: userNameLabel.width + 40
                     Layout.preferredHeight: userNameLabel.height + 20
@@ -379,9 +373,9 @@ Rectangle {
 
                     Rectangle {
                         anchors.fill: parent
-                        color: "white"
-                        opacity: userClickArea.pressed ? 0.2 : 0
-                        radius: 6
+                        color: container.surfaceHover
+                        opacity: userClickArea.containsMouse || userClickArea.pressed ? 1 : 0
+                        radius: container.cornerRadius
                         Behavior on opacity { NumberAnimation { duration: 100 } }
                     }
 
@@ -410,6 +404,7 @@ Rectangle {
                     MouseArea {
                         id: userClickArea
                         anchors.fill: parent
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: userPopup.open()
                     }
@@ -419,14 +414,14 @@ Rectangle {
                 }
 
                 Rectangle {
-                    id: sessionPill
+                    id: sessionSelector
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredWidth: 180
                     Layout.preferredHeight: 36
-                    color: (sessionClickArea.pressed || sessionPopup.opened) ? container.glassFillHover : container.glassFill
-                    radius: 18
+                    color: (sessionClickArea.containsMouse || sessionClickArea.pressed || sessionPopup.opened) ? container.surfaceHover : container.surface
+                    radius: container.cornerRadius
                     border.width: 1
-                    border.color: (sessionClickArea.pressed || sessionPopup.opened) ? container.textPrimary : container.glassBorder
+                    border.color: (sessionClickArea.pressed || sessionPopup.opened) ? container.textPrimary : container.surfaceBorder
 
                     scale: sessionClickArea.pressed ? 0.95 : 1.0
                     Behavior on scale { NumberAnimation { duration: 100 } }
@@ -461,21 +456,22 @@ Rectangle {
                     MouseArea {
                         id: sessionClickArea
                         anchors.fill: parent
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: sessionPopup.open()
                     }
                 }
 
-                RowLayout {
+                Item {
                     Layout.fillWidth: true
                     Layout.topMargin: 30
                     Layout.preferredHeight: 40
-                    spacing: 10
 
                     TextField {
                         id: passwordField
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 40
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: 250
+                        height: 40
                         echoMode: TextInput.Password
                         horizontalAlignment: Text.AlignHCenter
                         font.pixelSize: 16
@@ -483,12 +479,14 @@ Rectangle {
                         color: container.textPrimary
                         focus: loginState.visible
                         enabled: !container.isLoggingIn
+                        leftPadding: 16
+                        rightPadding: 16
 
                         background: Rectangle {
-                            color: parent.activeFocus ? container.glassFillHover : container.glassFill
+                            color: parent.activeFocus ? container.surfaceHover : container.surface
                             radius: height / 2
                             border.width: 1
-                            border.color: parent.activeFocus ? container.textPrimary : container.glassBorder
+                            border.color: parent.activeFocus ? container.textPrimary : container.surfaceBorder
                             opacity: parent.enabled ? 1.0 : 0.5
                         }
 
@@ -498,10 +496,63 @@ Rectangle {
                             font.pixelSize: 16
                             visible: !parent.text
                             anchors.centerIn: parent
-                            opacity: 0.5
+                            opacity: 1
                         }
 
                         onAccepted: container.doLogin()
+                    }
+
+                    Button {
+                        id: submitButton
+                        anchors.left: passwordField.right
+                        anchors.leftMargin: 10
+                        anchors.verticalCenter: passwordField.verticalCenter
+                        width: 40
+                        height: 40
+                        enabled: !container.isLoggingIn
+                        hoverEnabled: true
+                        focusPolicy: Qt.TabFocus
+                        Accessible.name: "Sign in"
+                        opacity: enabled ? 1 : 0.5
+
+                        background: Rectangle {
+                            radius: width / 2
+                            color: submitButton.hovered || submitButton.down || submitButton.activeFocus
+                                ? container.surfaceHover : container.surface
+                            border.width: 1
+                            border.color: submitButton.hovered || submitButton.activeFocus
+                                ? container.textPrimary : container.surfaceBorder
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
+
+                        contentItem: Item {
+                            // Draw the arrow independently of font glyph coverage.
+                            Canvas {
+                                anchors.centerIn: parent
+                                width: 18
+                                height: 18
+                                property color arrowColor: submitButton.hovered || submitButton.activeFocus
+                                    ? "#ffffff" : container.textSecondary
+                                onArrowColorChanged: requestPaint()
+                                onPaint: {
+                                    var ctx = getContext("2d");
+                                    ctx.reset();
+                                    ctx.strokeStyle = arrowColor;
+                                    ctx.lineWidth = 1.8;
+                                    ctx.lineCap = "round";
+                                    ctx.lineJoin = "round";
+                                    ctx.beginPath();
+                                    ctx.moveTo(3, 9);
+                                    ctx.lineTo(15, 9);
+                                    ctx.moveTo(10, 4);
+                                    ctx.lineTo(15, 9);
+                                    ctx.lineTo(10, 14);
+                                    ctx.stroke();
+                                }
+                            }
+                        }
+
+                        onClicked: container.doLogin()
                     }
                 }
                 
@@ -538,27 +589,25 @@ Rectangle {
 
     Popup {
         id: userPopup
+        parent: userSelector
         width: 260
         height: (typeof userModel !== "undefined") ? Math.min(300, userModel.count * 50 + 20) : 100
         x: (parent.width - width) / 2
-        y: (parent.height - height) / 2 - 50
+        y: parent.height + 8
         modal: true
+        dim: false
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        onOpened: userList.forceActiveFocus()
+        onOpened: {
+            userList.currentIndex = container.userIndex;
+            userList.forceActiveFocus();
+        }
+        onClosed: passwordField.forceActiveFocus()
         background: Rectangle {
-            color: Qt.rgba(0.12, 0.12, 0.12, 0.88)
-            radius: 16
-            opacity: 0.95
-            border.color: container.glassBorder
+            color: Qt.rgba(0.08, 0.08, 0.09, 0.96)
+            radius: container.cornerRadius
+            border.color: container.surfaceBorder
             border.width: 1
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: Qt.rgba(0, 0, 0, 0.5)
-                shadowBlur: 0.15
-                shadowVerticalOffset: 4
-            }
         }
         // Removed enter/exit transitions for instant visibility changes
         ListView {
@@ -576,8 +625,8 @@ Rectangle {
                 height: 40
                 property bool isCurrent: index === userList.currentIndex
                 background: Rectangle {
-                    color: isCurrent ? Qt.rgba(1, 1, 1, 0.15) : (hovered ? Qt.rgba(1, 1, 1, 0.08) : "transparent")
-                    radius: 8
+                    color: isCurrent || hovered ? container.surfaceHover : "transparent"
+                    radius: container.cornerRadius
                     Rectangle {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
@@ -597,8 +646,8 @@ Rectangle {
                         Layout.preferredWidth: 28
                         Layout.preferredHeight: 28
                         Layout.alignment: Qt.AlignVCenter
-                        color: isCurrent ? container.textPrimary : Qt.rgba(1, 1, 1, 0.1)
-                        radius: 14
+                        color: isCurrent ? container.textPrimary : container.surfaceHover
+                        radius: width / 2
                         Text {
                             anchors.centerIn: parent
                             text: {
@@ -608,7 +657,7 @@ Rectangle {
                                 var finalVal = d ? d.toString() : (n_r ? n_r.toString() : "U");
                                 return finalVal.charAt(0);
                             }
-                            color: isCurrent ? "black" : "white"
+                            color: isCurrent ? "#202124" : container.textPrimary
                             font.pixelSize: 12
                             font.family: fontBold.name
                             font.weight: Font.Bold
@@ -625,7 +674,7 @@ Rectangle {
                             var e = userModel.data(mIdx, Qt.EditRole);
                             return cleanName(d ? d : (r ? r : (n_r ? n_r : e)));
                         }
-                        color: isCurrent ? "white" : (hovered ? "#FFFFFF" : "#DDDDDD")
+                        color: isCurrent || hovered ? container.textPrimary : container.textSecondary
                         font.pixelSize: 15
                         font.family: fontRegular.name
                         horizontalAlignment: Text.AlignHCenter
@@ -648,28 +697,25 @@ Rectangle {
 
     Popup {
         id: sessionPopup
+        parent: sessionSelector
         width: 260
         height: (typeof sessionModel !== "undefined") ? Math.min(250, sessionModel.count * 50 + 20) : 100
         x: (parent.width - width) / 2
-        y: (parent.height - height) / 2 + 80
+        y: parent.height + 8
         modal: true
+        dim: false
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        onOpened: sessionList.forceActiveFocus()
+        onOpened: {
+            sessionList.currentIndex = container.sessionIndex;
+            sessionList.forceActiveFocus();
+        }
+        onClosed: passwordField.forceActiveFocus()
         background: Rectangle {
-            color: Qt.rgba(0.12, 0.12, 0.12, 0.88)
-            radius: 16
-            opacity: 0.95
-            border.color: container.glassBorder
+            color: Qt.rgba(0.08, 0.08, 0.09, 0.96)
+            radius: container.cornerRadius
+            border.color: container.surfaceBorder
             border.width: 1
-
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: Qt.rgba(0, 0, 0, 0.5)
-                shadowBlur: 0.15
-                shadowVerticalOffset: 4
-            }
         }
         // Removed enter/exit transitions for instant visibility changes
         ListView {
@@ -687,8 +733,8 @@ Rectangle {
                 height: 40
                 property bool isCurrent: index === sessionList.currentIndex
                 background: Rectangle {
-                    color: isCurrent ? Qt.rgba(1, 1, 1, 0.15) : (hovered ? Qt.rgba(1, 1, 1, 0.08) : "transparent")
-                    radius: 8
+                    color: isCurrent || hovered ? container.surfaceHover : "transparent"
+                    radius: container.cornerRadius
                     Rectangle {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
@@ -707,7 +753,7 @@ Rectangle {
                     Text {
                         Layout.preferredWidth: 40
                         text: "󰟀"
-                        color: isCurrent ? container.textPrimary : "gray"
+                        color: isCurrent ? container.textPrimary : container.textSecondary
                         font.pixelSize: 16
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -719,7 +765,7 @@ Rectangle {
                             var f_val = sessionModel.data(sessionModel.index(index, 0), Qt.UserRole + 2);
                             return cleanName(n_val ? n_val : f_val);
                         }
-                        color: isCurrent ? "white" : "#AAAAAA"
+                        color: isCurrent || hovered ? container.textPrimary : container.textSecondary
                         font.pixelSize: 14
                         font.family: fontRegular.name
                         horizontalAlignment: Text.AlignHCenter

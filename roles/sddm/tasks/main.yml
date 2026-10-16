@@ -1,18 +1,102 @@
 ---
-- name: Remove any previous Orchestre theme installation
+- name: Ensure Orchestre theme directory exists
   ansible.builtin.file:
     path: /usr/share/sddm/themes/orchestre
-    state: absent
-  become: true
-
-- name: Install Orchestre theme files
-  ansible.builtin.copy:
-    src: .
-    dest: /usr/share/sddm/themes/orchestre/
+    state: directory
     owner: root
     group: root
     mode: '0755'
   become: true
+
+- name: Install Orchestre theme files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /usr/share/sddm/themes/orchestre/
+    owner: root
+    group: root
+    mode: preserve
+    directory_mode: '0755'
+  loop:
+    - Main.qml
+    - theme.conf
+    - metadata.desktop
+    - components
+    - assets
+  become: true
+
+- name: Ensure wallpaper helper and persistent storage directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /usr/local/libexec
+    - /var/lib/orchestre
+    - /var/lib/orchestre/sddm
+  become: true
+
+- name: Install the fixed-destination SDDM wallpaper helper
+  ansible.builtin.copy:
+    src: scripts/orchestre-sddm-background
+    dest: /usr/local/libexec/orchestre-sddm-background
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Check for a saved SDDM wallpaper
+  ansible.builtin.stat:
+    path: /var/lib/orchestre/sddm/background.png
+  register: sddm_saved_background
+
+- name: Check the current desktop wallpaper
+  ansible.builtin.stat:
+    path: "{{ user_home }}/.config/hypr/current_wallpaper"
+    follow: true
+  register: sddm_current_background
+
+- name: Seed SDDM with the current desktop wallpaper
+  when:
+    - not sddm_saved_background.stat.exists
+    - sddm_current_background.stat.isreg | default(false)
+  block:
+    - name: Create a temporary PNG as the desktop user
+      ansible.builtin.tempfile:
+        suffix: .png
+      become: true
+      become_user: "{{ current_user }}"
+      register: sddm_initial_png
+
+    - name: Convert the initial wallpaper as the desktop user
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - |
+            import gi, sys
+            gi.require_version('GdkPixbuf', '2.0')
+            from gi.repository import GdkPixbuf
+            image = GdkPixbuf.Pixbuf.new_from_file(sys.argv[1])
+            image.savev(sys.argv[2], 'png', [], [])
+          - "{{ user_home }}/.config/hypr/current_wallpaper"
+          - "{{ sddm_initial_png.path }}"
+      become: true
+      become_user: "{{ current_user }}"
+      changed_when: true
+
+    - name: Publish the initial SDDM wallpaper
+      ansible.builtin.shell:
+        cmd: "/usr/local/libexec/orchestre-sddm-background < {{ sddm_initial_png.path | quote }}"
+      become: true
+      changed_when: true
+  always:
+    - name: Remove the temporary initial wallpaper
+      ansible.builtin.file:
+        path: "{{ sddm_initial_png.path }}"
+        state: absent
+      when: sddm_initial_png.path is defined
 
 - name: Ensure /etc/sddm.conf.d exists
   ansible.builtin.file:
@@ -34,17 +118,21 @@
     mode: '0644'
   become: true
 
-- name: Allow current_user to run the SDDM background helper without a password
+- name: Allow current_user to publish an SDDM wallpaper without a password
   ansible.builtin.copy:
-    dest: /etc/sudoers.d/{{ item }}-sddm
-    content: "{{ current_user }} ALL=(root) NOPASSWD: /home/{{ current_user }}/.local/bin/{{ item }}\n"
+    dest: /etc/sudoers.d/orchestre-sddm-background
+    content: |
+      {{ current_user }} ALL=(root) NOPASSWD: /usr/local/libexec/orchestre-sddm-background ""
     owner: root
     group: root
     mode: '0440'
     validate: 'visudo -cf %s'
-  loop:
-   - setbg
-   - setavatar
+  become: true
+
+- name: Remove the old user-editable wallpaper script sudo permission
+  ansible.builtin.file:
+    path: /etc/sudoers.d/setbg-sddm
+    state: absent
   become: true
 
 - name: Enable and start SDDM

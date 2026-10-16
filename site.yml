@@ -10,11 +10,13 @@
         current_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
 
     - name: Extract user home directory details
+      tags: always
       ansible.builtin.getent:
         database: passwd
         key: "{{ current_user }}"
 
     - name: Set target home path variable
+      tags: always
       ansible.builtin.set_fact:
         # Gathered user facts describe root under become; passwd describes
         # the account whose desktop configuration we are deploying.
@@ -27,7 +29,8 @@
   roles:
     - system
     - fonts
-    - sddm
+    - role: sddm
+      tags: sddm
     - vim
     - hyprland
     - rofi

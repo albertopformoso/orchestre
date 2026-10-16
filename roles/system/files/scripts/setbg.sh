@@ -1,26 +1,53 @@
 #!/bin/bash
+set -euo pipefail
 
-# Check if an image path was provided
-if [ -z "$1" ]; then
-    echo "Usage: setbg <path-to-wallpaper>"
+if [ "$#" -ne 1 ]; then
+    echo "Usage: setbg <path-to-wallpaper>" >&2
     exit 1
 fi
 
-# Get the absolute path of the provided image
-# (This is important because symlinks break if given relative paths)
-IMAGE_PATH=$(realpath "$1")
+IMAGE_PATH=$(realpath -e -- "$1")
+if [ ! -f "$IMAGE_PATH" ] || [ ! -r "$IMAGE_PATH" ]; then
+    echo "Wallpaper must be a readable image file: $IMAGE_PATH" >&2
+    exit 1
+fi
 
-# Single common symlink — source of truth for hyprlock, awww, and autostart
+SDDM_HELPER=/usr/local/libexec/orchestre-sddm-background
+if [ ! -x "$SDDM_HELPER" ]; then
+    echo "SDDM wallpaper helper is missing; deploy the sddm role first." >&2
+    exit 1
+fi
+
+# Validate and normalize as the desktop user. SDDM always gets a PNG, regardless
+# of the original format, without requiring access to the user's home at boot.
+TEMP_IMAGE=$(mktemp --suffix=.png)
+trap 'rm -f -- "$TEMP_IMAGE"' EXIT
+/usr/bin/python3 - "$IMAGE_PATH" "$TEMP_IMAGE" <<'PY'
+import sys
+import gi
+
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf, GLib
+
+try:
+    image = GdkPixbuf.Pixbuf.new_from_file(sys.argv[1])
+    image.savev(sys.argv[2], "png", [], [])
+except GLib.Error as error:
+    sys.exit(f"Invalid wallpaper: {error.message}")
+PY
+
+# The privileged helper only accepts stdin and writes one fixed destination.
+sudo -n -- "$SDDM_HELPER" < "$TEMP_IMAGE"
+
 WALLPAPER_LINK="$HOME/.config/hypr/current_wallpaper"
-
-# The path to your hyprlock symlink
 HYPRLOCK_SYMLINK="$HOME/.config/hypr/hyprlock/wallpaper"
+mkdir -p -- "$(dirname "$HYPRLOCK_SYMLINK")"
+ln -sfnT -- "$IMAGE_PATH" "$WALLPAPER_LINK"
+ln -sfnT -- "$IMAGE_PATH" "$HYPRLOCK_SYMLINK"
 
-# 1. Force-create/update the symlink (-s makes it symbolic, -f forces overwrite)
-ln -sf "$IMAGE_PATH" "$WALLPAPER_LINK"
-ln -sf "$IMAGE_PATH" "$HYPRLOCK_SYMLINK"
+if ! awww img "$IMAGE_PATH" --transition-type wipe; then
+    echo "Wallpaper saved for SDDM, Hyprlock, and next session; awww could not update the running desktop." >&2
+    exit 1
+fi
 
-# 2. Set the desktop wallpaper
-awww img "$IMAGE_PATH" --transition-type wipe
-
-echo "Wallpaper and hyprlock background updated to: $IMAGE_PATH"
+echo "Desktop, Hyprlock, and SDDM background updated to: $IMAGE_PATH"
