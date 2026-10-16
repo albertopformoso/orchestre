@@ -1,20 +1,33 @@
 #!/usr/bin/env bash
-# waybar-power-menu — power options menu for waybar (rofi).
-# Entries: Lock (hyprlock), Suspend, Reboot, Power off.
+# Shared by Waybar and Super+Delete.
 set -euo pipefail
 
-choice="$(printf '%s\n' \
-    ' Lock' \
-    ' Suspend' \
-    ' Reboot' \
-    ' Power Off' \
-    | rofi -dmenu -i -p 'Power' \
-        -theme-str 'window { width: 18em; } listview { lines: 4; }')"
+if ! command -v wlogout >/dev/null 2>&1; then
+    notify-send 'Power menu unavailable' 'Install wlogout, then open the power menu again.'
+    exit 1
+fi
 
-case "$choice" in
-    *Lock*)     hyprlock -c "$HOME/.config/hypr/hyprlock/hyprlock.conf" ;;
-    *Suspend*)  systemctl suspend ;;
-    *Reboot*)   systemctl reboot ;;
-    *Power*)    systemctl poweroff ;;
-    *)          exit 0 ;;
-esac
+# Hyprland reports physical pixels; GTK margins use logical pixels. Account
+# for fractional scale and rotated outputs before centering the tall tiles.
+read -r horizontal vertical < <(hyprctl -j monitors | python3 -c '
+import json
+import sys
+
+monitors = json.load(sys.stdin)
+monitor = next(m for m in monitors if m.get("focused"))
+width, height = monitor["width"], monitor["height"]
+if monitor.get("transform", 0) % 2:
+    width, height = height, width
+width, height = int(width / monitor["scale"]), int(height / monitor["scale"])
+print(max(0, (width - min(1000, int(width * 0.84))) // 2),
+      max(0, (height - min(560, int(height * 0.72))) // 2))
+')
+
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/wlogout"
+# Keep repeated clicks/key presses from opening overlapping menus. --close
+# prevents power actions from inheriting the lock descriptor.
+exec flock --nonblock --close "${XDG_RUNTIME_DIR:?}/orchestre-power-menu.lock" \
+    wlogout --protocol layer-shell --no-span --buttons-per-row 4 \
+    --layout "$config_dir/layout" --css "$config_dir/style.css" \
+    --margin-left "$horizontal" --margin-right "$horizontal" \
+    --margin-top "$vertical" --margin-bottom "$vertical"

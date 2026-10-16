@@ -1,0 +1,84 @@
+/* Tall-tile layout inspired by prasanthrangan/hyprdots wlogout/style_1.css.
+ * Self-contained Orchestre palette; icons are relative to this stylesheet. */
+@define-color ink #f5f6f8;
+@define-color cyan #22d3ee;
+@define-color blue #60a5fa;
+@define-color amber #fbbf24;
+@define-color red #f4505e;
+
+* {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 15px;
+    background-image: none;
+    box-shadow: none;
+    text-shadow: none;
+}
+
+window {
+    background-color: rgba(14, 15, 17, 0.48);
+}
+
+button {
+    color: @ink;
+    background-color: rgba(20, 21, 24, 0.92);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 32%;
+    border: 2px solid transparent;
+    border-radius: 0;
+    outline-style: none;
+    margin: 18px 0;
+    padding: 18px 8px;
+    transition: all 250ms ease-in-out;
+}
+
+#lock {
+    background-image: url("icons/lock.svg");
+    background-color: rgba(19, 46, 53, 0.94);
+    border-radius: 24px 0 0 24px;
+}
+
+#suspend {
+    background-image: url("icons/suspend.svg");
+    background-color: rgba(26, 37, 57, 0.94);
+}
+
+#reboot {
+    background-image: url("icons/reboot.svg");
+    background-color: rgba(51, 42, 26, 0.94);
+}
+
+#shutdown {
+    background-image: url("icons/shutdown.svg");
+    background-color: rgba(53, 28, 34, 0.94);
+    border-radius: 0 24px 24px 0;
+}
+
+button:hover,
+button:focus {
+    background-size: 40%;
+    border-radius: 24px;
+    margin: 0;
+}
+
+#lock:hover, #lock:focus {
+    border-radius: 24px;
+    background-color: rgba(22, 104, 119, 0.98);
+    border-color: @cyan;
+}
+
+#suspend:hover, #suspend:focus {
+    background-color: rgba(43, 79, 133, 0.98);
+    border-color: @blue;
+}
+
+#reboot:hover, #reboot:focus {
+    background-color: rgba(122, 85, 27, 0.98);
+    border-color: @amber;
+}
+
+#shutdown:hover, #shutdown:focus {
+    border-radius: 24px;
+    background-color: rgba(140, 44, 58, 0.98);
+    border-color: @red;
+}

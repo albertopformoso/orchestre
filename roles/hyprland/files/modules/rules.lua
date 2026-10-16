@@ -3,6 +3,14 @@
 
 -- Example window rules that are useful
 
+-- wlogout's translucent fullscreen surface reveals the blurred desktop.
+hl.layer_rule({
+    name = "blur-power-menu",
+    match = { namespace = "^logout_dialog$" },
+    blur = true,
+    ignore_alpha = 0.01,
+})
+
 -- Keep new windows in the Super+S scratch workspace detached.
 hl.window_rule({
     name  = "float-magic-workspace",

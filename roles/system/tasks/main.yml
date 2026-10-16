@@ -74,6 +74,7 @@
       - gdk-pixbuf2
       - papirus-icon-theme
       # Waybar companions (from the waybar role)
+      - wlogout            # Fullscreen power menu
       - pavucontrol        # Floating volume mixer (opened by the volume module)
       - networkmanager     # Required by the Wi-Fi menu (nmcli) and the network module
       - bluez              # Bluetooth stack (bluez + bluetoothd) for the bluetooth module

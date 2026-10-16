@@ -16,7 +16,9 @@
 
     - name: Set target home path variable
       ansible.builtin.set_fact:
-        user_home: "{{ ansible_facts['user_dir'] }}"
+        # Gathered user facts describe root under become; passwd describes
+        # the account whose desktop configuration we are deploying.
+        user_home: "{{ ansible_facts['getent_passwd'][current_user][4] }}"
 
     - name: Detect MSI laptop (msi-ec sysfs interface availability)
       ansible.builtin.set_fact:

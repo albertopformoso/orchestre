@@ -61,7 +61,7 @@ window#waybar {
     background: transparent;
     border: none;
     min-width: 0;
-    padding: 0 5px;
+    padding: 0 6px;
     color: @dim;
     transition: color 0.2s ease, text-shadow 0.2s ease;
 }
