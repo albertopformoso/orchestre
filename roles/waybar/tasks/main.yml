@@ -294,6 +294,23 @@
     - waybar-power-menu
     - waybar-temp
 
+- name: Ensure wlogout configuration directory exists
+  ansible.builtin.file:
+    path: "{{ user_home }}/.config/wlogout"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy fullscreen power menu layout, style, and icons
+  ansible.builtin.copy:
+    src: wlogout/
+    dest: "{{ user_home }}/.config/wlogout/"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+    directory_mode: '0755'
+
 - name: Deploy power profile switcher script (powerprofilesctl + MSI EC sync)
   ansible.builtin.copy:
     src: scripts/waybar-power-profile
