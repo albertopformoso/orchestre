@@ -375,7 +375,7 @@ Rectangle {
                         anchors.fill: parent
                         color: container.surfaceHover
                         opacity: userClickArea.containsMouse || userClickArea.pressed ? 1 : 0
-                        radius: container.cornerRadius
+                        radius: height / 2
                         Behavior on opacity { NumberAnimation { duration: 100 } }
                     }
 
@@ -419,7 +419,7 @@ Rectangle {
                     Layout.preferredWidth: 180
                     Layout.preferredHeight: 36
                     color: (sessionClickArea.containsMouse || sessionClickArea.pressed || sessionPopup.opened) ? container.surfaceHover : container.surface
-                    radius: container.cornerRadius
+                    radius: height / 2
                     border.width: 1
                     border.color: (sessionClickArea.pressed || sessionPopup.opened) ? container.textPrimary : container.surfaceBorder
 

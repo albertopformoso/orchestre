@@ -107,6 +107,7 @@
       - gnome-themes-extra
       - hyprshot
       - waybar-git
+      - trayscale
     state: present
   become: true
   become_user: aur_builder
