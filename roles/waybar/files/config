@@ -11,7 +11,7 @@
     "reload_style_on_change": true,
 
     "modules-left": ["custom/power", "hyprland/workspaces"],
-    "modules-right": ["group/audio", "network", "bluetooth", "group/temps", "custom/power-profile", "custom/fan-mode", "battery", "clock"],
+    "modules-right": ["group/tray", "group/audio", "network", "bluetooth", "group/temps", "custom/power-profile", "custom/fan-mode", "battery", "clock"],
 
     // App icons per workspace; repeated icons show a window count.
     // Empty workspaces and unrecognized apps use a dot. Click to focus.
@@ -30,7 +30,7 @@
         },
         "format-window-separator": " ",
         "window-rewrite-group-threshold": 2,
-        "window-rewrite-group-format": "{icon}×{count}",
+        "window-rewrite-group-format": "{icon} <span size='smaller' foreground='#9398a1'>{count}</span>",
         "tooltips": {
             "default": "Workspace {name}\n{windows}",
             "empty": "Workspace {name}"
@@ -51,6 +51,7 @@
             "class<([Tt]hunar|[Nn]autilus|org.gnome.Nautilus|[Dd]olphin|org.kde.dolphin|[Nn]emo|[Pp]cmanfm.*)>": "󰉋",
             "class<([Dd]iscord.*|[Vv]esktop|dev.vencord.Vesktop|com.discordapp.Discord)>": "󰙯",
             "class<([Ss]potify|com.spotify.Client)>": "",
+            "class<([Cc]arla([0-9]+)?(-.*)?)>": "󰓃",
             "class<([Ss]team|steam_app_.*|com.valvesoftware.Steam)>": "",
             "class<([Vv]lc|org.videolan.VLC|[Mm]pv)>": "󰕼",
             "class<([Pp]avucontrol|org.pulseaudio.pavucontrol)>": "󰕾",
@@ -62,6 +63,24 @@
         "on-click": "activate",
         "on-click-middle": "close",
         "sort-by": "id"
+    },
+
+    // Hover the chevron to reveal background apps to its left.
+    "group/tray": {
+        "orientation": "inherit",
+        "drawer": {
+            "transition-duration": 200,
+            "transition-left-to-right": false
+        },
+        "modules": ["custom/tray-toggle", "tray"]
+    },
+    "custom/tray-toggle": {
+        "format": "󰁓",
+        "tooltip": false
+    },
+    "tray": {
+        "icon-size": 14,
+        "spacing": 6
     },
 
     // Hover the volume module to reveal a slider to its right.
@@ -212,7 +231,7 @@
     "clock": {
         "interval": 60,
         "format": "  {:%I:%M %p}",
-        "format-alt": "󰃰  {:%A, %d %B %Y}",
+        "format-alt": "{:%a %d %b %I:%M %p}",
         "tooltip-format": "<tt><small>{calendar}</small></tt>",
         "calendar": {
             "mode": "month",
@@ -220,11 +239,11 @@
             "first-day-of-week": 1,
             "on-scroll": 1,
             "format": {
-                "months":   "<span color='#22d3ee'><b>{}</b></span>",
+                "months":   "<span color='#fad77d'><b>{}</b></span>",
                 "weekdays": "<span color='#9398a1'><b>{}</b></span>",
                 "weeks":    "<span color='#6b7079'><b>W{}</b></span>",
                 "days":     "<span color='#f5f6f8'>{}</span>",
-                "today":    "<span color='#22d3ee'><b><u>{}</u></b></span>"
+                "today":    "<span color='#f3707b'><b><u>{}</u></b></span>"
             }
         },
         "actions": {

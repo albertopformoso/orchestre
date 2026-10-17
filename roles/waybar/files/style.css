@@ -6,6 +6,7 @@
 @define-color ink #f5f6f8;
 @define-color dim #9398a1;
 @define-color dim_empty #6b7079;
+@define-color white #e8e9ec;
 @define-color cyan #22d3ee;
 @define-color blue #60a5fa;
 @define-color green #34d399;
@@ -67,7 +68,7 @@ window#waybar {
 }
 
 #workspaces button.active {
-    color: @cyan;
+    color: @white;
     font-weight: bold;
 }
 
@@ -100,6 +101,20 @@ window#waybar {
 
 /* --- Right side modules -------------------------------------------------- */
 
+#custom-tray-toggle {
+    color: @dim;
+    font-size: 16px;
+    padding: 0 4px;
+}
+
+#custom-tray-toggle:hover {
+    color: @ink;
+}
+
+#tray {
+    padding: 0 4px;
+}
+
 #pulseaudio.muted {
     color: @dim;
 }
@@ -121,7 +136,7 @@ window#waybar {
 #pulseaudio-slider highlight {
     min-height: 4px;
     border-radius: 2px;
-    background: @cyan;
+    background: @white;
     box-shadow: none;
 }
 
@@ -130,7 +145,7 @@ window#waybar {
     min-height: 8px;
     margin: -2px;
     border-radius: 50%;
-    background: @cyan;
+    background: @white;
     box-shadow: none;
 }
 
@@ -198,13 +213,15 @@ window#waybar {
 #battery.critical.discharging { color: @red; animation: urgent-blink 1s linear infinite; }
 
 #custom-power {
-    padding-right: 10px;
+    /* padding-left: 10px;
+    padding-right: 10px; */
+    padding: 0 10px;
     margin: 5px 0;
     color: @dim;
 }
 
 #custom-power:hover {
-    color: #ffffff;
+    color: @white;
     background: transparent;
 }
 
