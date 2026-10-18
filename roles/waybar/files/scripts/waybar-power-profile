@@ -4,7 +4,7 @@
 # so the bar uses this script instead: it renders the active profile and, on
 # click, cycles power-saver -> balanced -> performance (left click, forward;
 # right click, reverse) while keeping the MSI EC shift/fan/boost modes in sync
-# (msi-ec sysfs, MSI laptops only).
+# (msi-ec sysfs, MSI laptops only), plus CPU frequency and Intel turbo limits.
 #
 # The daemon is reached directly over D-Bus via busctl: powerprofilesctl is a
 # Python script whose ~200ms interpreter startup makes clicks feel laggy.
@@ -16,6 +16,7 @@
 set -euo pipefail
 
 MSI_EC=/sys/devices/platform/msi-ec
+INTEL_NO_TURBO=/sys/devices/system/cpu/intel_pstate/no_turbo
 PROFILES=(power-saver balanced performance)
 ICONS=(󰾆 󰾅 󰓅)
 PPD_DEST=org.freedesktop.UPower.PowerProfiles
@@ -64,20 +65,39 @@ apply_msi_ec() {
     [[ -d $MSI_EC ]] || return 0
     case "$profile" in
         power-saver)
-            echo eco     | sudo -n tee "$MSI_EC/shift_mode"   >/dev/null
-            echo silent  | sudo -n tee "$MSI_EC/fan_mode"     >/dev/null
-            echo off     | sudo -n tee "$MSI_EC/cooler_boost" >/dev/null
+            echo eco     | sudo -n /usr/bin/tee "$MSI_EC/shift_mode"   >/dev/null || return 1
+            echo silent  | sudo -n /usr/bin/tee "$MSI_EC/fan_mode"     >/dev/null || return 1
+            echo off     | sudo -n /usr/bin/tee "$MSI_EC/cooler_boost" >/dev/null || return 1
             ;;
         balanced)
-            echo comfort | sudo -n tee "$MSI_EC/shift_mode"   >/dev/null
-            echo auto    | sudo -n tee "$MSI_EC/fan_mode"     >/dev/null
-            echo off     | sudo -n tee "$MSI_EC/cooler_boost" >/dev/null
+            echo comfort | sudo -n /usr/bin/tee "$MSI_EC/shift_mode"   >/dev/null || return 1
+            echo auto    | sudo -n /usr/bin/tee "$MSI_EC/fan_mode"     >/dev/null || return 1
+            echo off     | sudo -n /usr/bin/tee "$MSI_EC/cooler_boost" >/dev/null || return 1
             ;;
         performance)
-            echo turbo   | sudo -n tee "$MSI_EC/shift_mode"   >/dev/null
-            echo on      | sudo -n tee "$MSI_EC/cooler_boost" >/dev/null
+            echo turbo   | sudo -n /usr/bin/tee "$MSI_EC/shift_mode"   >/dev/null || return 1
+            echo on      | sudo -n /usr/bin/tee "$MSI_EC/cooler_boost" >/dev/null || return 1
             ;;
+        *) return 1 ;;
     esac
+}
+
+# CPU settings are independent of MSI firmware support. Enable turbo before
+# requesting above-base frequencies; no_turbo=1 means turbo is DISABLED.
+# Keep the exact cpupower commands in sync with waybar-cpu-profile sudoers.
+apply_cpu_limit() {
+    local profile="$1" max_freq no_turbo
+    case "$profile" in
+        power-saver) max_freq=1.8GHz; no_turbo=1 ;;
+        balanced)    max_freq=3.1GHz; no_turbo=0 ;;
+        performance) max_freq=3.4GHz; no_turbo=0 ;;
+        *) return 1 ;;
+    esac
+
+    if [[ -f $INTEL_NO_TURBO ]]; then
+        echo "$no_turbo" | sudo -n /usr/bin/tee "$INTEL_NO_TURBO" >/dev/null || return 1
+    fi
+    sudo -n /usr/bin/cpupower frequency-set -u "$max_freq" >/dev/null || return 1
 }
 
 if [[ ${1:-} == set ]]; then
@@ -93,6 +113,10 @@ if [[ ${1:-} == set ]]; then
         i="$(current_index)"
         target="${PROFILES[$(( (i - 1 + ${#PROFILES[@]}) % ${#PROFILES[@]} ))]}"
     fi
+    case "$target" in
+        power-saver|balanced|performance) ;;
+        *) notify_err "Unknown power profile: '$target'"; exit 1 ;;
+    esac
     if ! busctl --system set-property "$PPD_DEST" "$PPD_PATH" "$PPD_IFACE" \
             ActiveProfile s "$target" \
         && ! powerprofilesctl set "$target"; then
@@ -104,6 +128,10 @@ if [[ ${1:-} == set ]]; then
     pkill -RTMIN+8 waybar 2>/dev/null || true
     if ! apply_msi_ec "$target"; then
         notify_err "Profile set, but writing $MSI_EC failed (sudoers entry missing?)"
+        exit 1
+    fi
+    if ! apply_cpu_limit "$target"; then
+        notify_err "Profile set, but applying CPU frequency/turbo limits failed (check cpupower and sudoers permissions)"
         exit 1
     fi
 fi

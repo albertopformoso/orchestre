@@ -24,7 +24,7 @@
     - assets
   become: true
 
-- name: Ensure wallpaper helper and persistent storage directories exist
+- name: Ensure image helper and persistent storage directories exist
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -37,13 +37,28 @@
     - /var/lib/orchestre/sddm
   become: true
 
-- name: Install the fixed-destination SDDM wallpaper helper
+- name: Install the fixed-destination SDDM image helpers
   ansible.builtin.copy:
-    src: scripts/orchestre-sddm-background
-    dest: /usr/local/libexec/orchestre-sddm-background
+    src: "scripts/orchestre-sddm-{{ item }}"
+    dest: "/usr/local/libexec/orchestre-sddm-{{ item }}"
     owner: root
     group: root
     mode: '0755'
+  loop:
+    - background
+    - avatar
+  become: true
+
+- name: Associate the custom SDDM avatar with the desktop account
+  community.general.ini_file:
+    path: /usr/share/sddm/themes/orchestre/theme.conf.user
+    section: General
+    option: syncedAvatarUser
+    value: "{{ current_user }}"
+    no_extra_spaces: true
+    owner: root
+    group: root
+    mode: '0644'
   become: true
 
 - name: Check for a saved SDDM wallpaper
@@ -118,21 +133,27 @@
     mode: '0644'
   become: true
 
-- name: Allow current_user to publish an SDDM wallpaper without a password
+- name: Allow current_user to publish SDDM images without a password
   ansible.builtin.copy:
-    dest: /etc/sudoers.d/orchestre-sddm-background
+    dest: "/etc/sudoers.d/orchestre-sddm-{{ item }}"
     content: |
-      {{ current_user }} ALL=(root) NOPASSWD: /usr/local/libexec/orchestre-sddm-background ""
+      {{ current_user }} ALL=(root) NOPASSWD: /usr/local/libexec/orchestre-sddm-{{ item }} ""
     owner: root
     group: root
     mode: '0440'
     validate: 'visudo -cf %s'
+  loop:
+    - background
+    - avatar
   become: true
 
-- name: Remove the old user-editable wallpaper script sudo permission
+- name: Remove old user-editable image script sudo permissions
   ansible.builtin.file:
-    path: /etc/sudoers.d/setbg-sddm
+    path: "/etc/sudoers.d/{{ item }}-sddm"
     state: absent
+  loop:
+    - setbg
+    - setavatar
   become: true
 
 - name: Enable and start SDDM

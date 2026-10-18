@@ -1,0 +1,5 @@
+# Keep these exact frequency limits in sync with waybar-power-profile.
+{{ current_user }} ALL=(root) NOPASSWD: /usr/bin/tee /sys/devices/system/cpu/intel_pstate/no_turbo
+{{ current_user }} ALL=(root) NOPASSWD: /usr/bin/cpupower frequency-set -u 1.8GHz
+{{ current_user }} ALL=(root) NOPASSWD: /usr/bin/cpupower frequency-set -u 3.1GHz
+{{ current_user }} ALL=(root) NOPASSWD: /usr/bin/cpupower frequency-set -u 3.4GHz

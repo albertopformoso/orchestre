@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""Share one event-driven MPRIS selection across Waybar media labels and controls."""
+
+import html
+import json
+import os
+from pathlib import Path
+import socket
+import sys
+import time
+from urllib.parse import urlsplit
+
+SOCKET = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "waybar-media.sock"
+ROLES = ("bars", "source", "previous", "toggle", "next", "title")
+FRAMES = ("▂▅▃▆", "▃▆▂▄", "▅▃▆▂", "▆▂▄▅", "▄▆▅▃", "▂▄▆▅")
+
+
+def source_for(name, url):
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        host = ""
+    name = name.lower()
+    if "feishin" in name or host == "feishin.vercel.app" or "feishin" in host:
+        return "Feishin", "󰎆", "#e8e9ec"
+    if "navidrome" in name or "navidrome" in host:
+        return "Navidrome", "󰎆", "#e8e9ec"
+    if host == "music.youtube.com":
+        return "YouTube Music", "󰎇", "#ff0033"
+    if host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com"):
+        return "YouTube", "", "#ff0033"
+    if "spotify" in name or host == "open.spotify.com":
+        return "Spotify", "", "#1db954"
+    return name.split(".")[0].capitalize(), "󰎆", "#e8e9ec"
+
+
+def metadata(player):
+    return player.props.metadata.unpack() if player.props.metadata else {}
+
+
+def has_media(player):
+    data = metadata(player)
+    return bool(data.get("xesam:title") or data.get("xesam:artist"))
+
+
+def serve():
+    import gi
+    gi.require_version("Playerctl", "2.0")
+    from gi.repository import GLib, Playerctl
+
+    manager = Playerctl.PlayerManager()
+    players = {}
+    subscribers = {}
+    selected = None
+    frame = 0
+
+    def playing(player):
+        return player.props.playback_status == Playerctl.PlaybackStatus.PLAYING
+
+    def choose():
+        nonlocal selected
+        available = [p for p in players.values() if has_media(p)]
+        active = [p for p in available if playing(p)]
+        if selected in active:
+            return selected
+        if active:
+            selected = active[-1]
+        elif selected not in available:
+            selected = available[-1] if available else None
+        return selected
+
+    def payloads():
+        player = choose()
+        if player is None:
+            return {role: {"text": "", "tooltip": ""} for role in ROLES}
+        data = metadata(player)
+        title = data.get("xesam:title", "")
+        artists = data.get("xesam:artist", [])
+        artist = ", ".join(artists) if isinstance(artists, (list, tuple)) else str(artists)
+        text = " — ".join(part for part in (artist, title) if part)
+        source, icon, color = source_for(player.props.player_name, data.get("xesam:url", ""))
+        is_playing = playing(player)
+        state = "playing" if is_playing else "paused"
+        tooltip = html.escape(f"{source} · {state.capitalize()}\n{text}")
+        result = {
+            "source": {
+                "text": f'<span foreground="{color}">{icon}</span>',
+                "tooltip": tooltip,
+                "class": state,
+            },
+            "bars": {"text": FRAMES[frame], "tooltip": tooltip, "class": state},
+            "title": {"text": html.escape(text), "tooltip": tooltip, "class": state},
+        }
+        for role, glyph, allowed, hint in (
+            ("previous", "󰒮", player.props.can_go_previous, "Previous"),
+            ("toggle", "󰏤" if is_playing else "󰐊",
+             player.props.can_pause if is_playing else player.props.can_play,
+             "Pause" if is_playing else "Play"),
+            ("next", "󰒭", player.props.can_go_next, "Next"),
+        ):
+            enabled = player.props.can_control and allowed
+            result[role] = {"text": glyph, "class": "enabled" if enabled else "disabled",
+                            "tooltip": hint if enabled else f"{hint} unavailable"}
+        return result
+
+    def publish(*_args):
+        values = payloads()
+        for connection, (role, previous) in list(subscribers.items()):
+            line = json.dumps(values[role], ensure_ascii=False) + "\n"
+            if line == previous:
+                continue
+            try:
+                connection.sendall(line.encode())
+                subscribers[connection] = (role, line)
+            except OSError:
+                connection.close()
+                subscribers.pop(connection, None)
+
+    def add_player(_manager, name):
+        if name.instance in players or name.name == "playerctld":
+            return
+        try:
+            player = Playerctl.Player.new_from_name(name)
+            players[name.instance] = player
+            manager.manage_player(player)
+            for signal in ("metadata", "playback-status"):
+                player.connect(signal, publish)
+            for prop in ("can-control", "can-play", "can-pause", "can-go-next", "can-go-previous"):
+                player.connect("notify::" + prop, publish)
+            publish()
+        except GLib.Error as error:
+            print(error, file=sys.stderr)
+
+    def remove_player(_manager, player):
+        players.pop(player.props.player_instance, None)
+        publish()
+
+    manager.connect("name-appeared", add_player)
+    manager.connect("player-vanished", remove_player)
+    for name in manager.props.player_names:
+        add_player(manager, name)
+
+    def tick():
+        nonlocal frame
+        player = choose()
+        if player and playing(player):
+            frame = (frame + 1) % len(FRAMES)
+            publish()
+        return True
+
+    def receive(connection, _condition):
+        try:
+            request = connection.recv(128).decode().strip()
+            if request.startswith("watch ") and request[6:] in ROLES:
+                subscribers[connection] = (request[6:], None)
+                publish()
+                if connection in subscribers:
+                    GLib.io_add_watch(connection, GLib.IO_HUP | GLib.IO_ERR, disconnected)
+                return False
+            player = choose()
+            if player and player.props.can_control:
+                if request == "previous" and player.props.can_go_previous:
+                    player.previous()
+                elif request == "next" and player.props.can_go_next:
+                    player.next()
+                elif request == "toggle":
+                    if playing(player) and player.props.can_pause:
+                        player.pause()
+                    elif not playing(player) and player.props.can_play:
+                        player.play()
+        except (OSError, GLib.Error) as error:
+            print(error, file=sys.stderr)
+        connection.close()
+        return False
+
+    def disconnected(connection, _condition):
+        subscribers.pop(connection, None)
+        connection.close()
+        return False
+
+    def accept(server, _condition):
+        connection, _address = server.accept()
+        connection.setblocking(False)
+        GLib.io_add_watch(connection, GLib.IO_IN | GLib.IO_HUP, receive)
+        return True
+
+    SOCKET.unlink(missing_ok=True)
+    server = socket.socket(socket.AF_UNIX)
+    server.bind(str(SOCKET))
+    SOCKET.chmod(0o600)
+    server.listen(16)
+    GLib.io_add_watch(server, GLib.IO_IN, accept)
+    GLib.timeout_add(250, tick)
+    try:
+        GLib.MainLoop().run()
+    finally:
+        server.close()
+        SOCKET.unlink(missing_ok=True)
+
+
+def client(request, watch):
+    while True:
+        try:
+            with socket.socket(socket.AF_UNIX) as connection:
+                connection.connect(str(SOCKET))
+                connection.sendall((request + "\n").encode())
+                if not watch:
+                    return
+                with connection.makefile() as stream:
+                    for line in stream:
+                        print(line.rstrip(), flush=True)
+        except OSError:
+            if not watch:
+                return
+        if watch:
+            print('{"text":""}', flush=True)
+            time.sleep(1)
+
+
+if __name__ == "__main__":
+    try:
+        if sys.argv[1:] == ["serve"]:
+            serve()
+        elif len(sys.argv) == 3 and sys.argv[1] == "watch" and sys.argv[2] in ROLES:
+            client("watch " + sys.argv[2], True)
+        elif len(sys.argv) == 2 and sys.argv[1] in ("previous", "toggle", "next"):
+            client(sys.argv[1], False)
+        else:
+            sys.exit("usage: waybar-media serve | watch ROLE | previous | toggle | next")
+    except (BrokenPipeError, KeyboardInterrupt):
+        pass

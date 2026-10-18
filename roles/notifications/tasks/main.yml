@@ -59,6 +59,22 @@
     group: "{{ current_user }}"
     mode: '0755'
 
+- name: Deploy shared battery notification helper
+  ansible.builtin.copy:
+    src: battery-notifications
+    dest: "/home/{{ current_user }}/.local/bin/battery-notifications"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy shared battery notification service
+  ansible.builtin.copy:
+    src: battery-notifications.service
+    dest: "/home/{{ current_user }}/.config/systemd/user/battery-notifications.service"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+
 - name: Deploy notification workspace service
   ansible.builtin.copy:
     src: notification-workspaces.service

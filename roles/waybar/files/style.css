@@ -101,6 +101,46 @@ window#waybar {
 
 /* --- Right side modules -------------------------------------------------- */
 
+/* The global 4px module spacing plus this inset gives a 24px media gap. */
+#custom-media-bars {
+    margin-left: 20px;
+    padding-right: 6px;
+    color: @dim;
+}
+
+#media-title {
+    color: @ink;
+}
+
+#custom-media-source {
+    font-family: "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", monospace;
+    min-width: 16px;
+    padding: 0 6px;
+}
+
+#media-title.paused {
+    color: @dim;
+}
+
+#custom-media-previous,
+#custom-media-toggle,
+#custom-media-next {
+    padding: 0 5px;
+    color: @dim;
+}
+
+#custom-media-previous:hover,
+#custom-media-toggle:hover,
+#custom-media-next:hover {
+    color: @ink;
+}
+
+#custom-media-previous.disabled,
+#custom-media-toggle.disabled,
+#custom-media-next.disabled {
+    color: @dim_empty;
+}
+
 #custom-tray-toggle {
     color: @dim;
     font-size: 16px;
@@ -109,6 +149,21 @@ window#waybar {
 
 #custom-tray-toggle:hover {
     color: @ink;
+}
+
+/* The drawer marks itself empty when no tray items are visible. */
+#tray.empty #custom-tray-toggle {
+    font-size: 0;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    opacity: 0;
+}
+
+#tray.empty {
+    padding: 0;
+    margin: 0;
 }
 
 #tray {

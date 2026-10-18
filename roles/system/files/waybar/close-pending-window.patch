@@ -1,0 +1,14 @@
+diff --git a/src/modules/hyprland/workspaces.cpp b/src/modules/hyprland/workspaces.cpp
+--- a/src/modules/hyprland/workspaces.cpp
++++ b/src/modules/hyprland/workspaces.cpp
+@@ -526,6 +526,10 @@ void Workspaces::onWindowOpened(std::string const& payload) {
+ void Workspaces::onWindowClosed(std::string const& addr) {
+   spdlog::trace("Window closed: {}", addr);
+   updateWindowCount();
++  // A short-lived window can close before the UI thread processes its open
++  // event. Cancel that queued insertion so it cannot resurrect a stale icon.
++  std::erase_if(m_windowsToCreate,
++                [&addr](const auto& window) { return window.getAddress() == addr; });
+   m_orphanWindowMap.erase(addr);
+   for (auto& workspace : m_workspaces) {
+     if (workspace->closeWindow(addr)) {

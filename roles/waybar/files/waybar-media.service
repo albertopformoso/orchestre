@@ -1,0 +1,11 @@
+[Unit]
+Description=Waybar media player selection and decorative animation
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/waybar-media serve
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,43 @@
+# Pin the currently deployed Waybar revision plus the pending-window fix.
+pkgname=waybar-git
+pkgver=0.15.0.r1004.g6d60c8e
+pkgrel=2
+pkgdesc='Waybar with the short-lived Hyprland window cleanup fix'
+arch=('x86_64')
+url='https://github.com/Alexays/Waybar'
+license=('MIT')
+provides=("waybar=$pkgver")
+conflicts=('waybar')
+depends=('fmt' 'gtk-layer-shell' 'gtkmm3' 'jack' 'jsoncpp' 'libdbusmenu-gtk3'
+         'libevdev' 'libinput' 'libmm-glib' 'libmpdclient' 'libnl' 'libpulse'
+         'libsigc++' 'libwireplumber' 'libxkbcommon' 'playerctl' 'sndio'
+         'spdlog' 'upower' 'wayland' 'libepoxy')
+makedepends=('git' 'meson' 'ninja' 'scdoc' 'wayland-protocols' 'python')
+source=('Waybar::git+https://github.com/Alexays/Waybar.git#commit=6d60c8e02be67bb85bb9b1ea803f2fbcf0722002'
+        'close-pending-window.patch'
+        'test-close-race.py')
+sha256sums=('SKIP' '7e0f491553a9a461100d8be0ae30d2ec3a91f8d19a9ab5884449dbf406ad0c06'
+            '0604e224bc6aff2c1319b7b9065459bfccc92140d1de5df399b83291799430c9')
+PKGEXT='.pkg.tar.zst'
+
+prepare() {
+    cd "$srcdir/Waybar"
+    git apply "$srcdir/close-pending-window.patch"
+}
+
+build() {
+    cd "$srcdir/Waybar"
+    meson setup build --prefix=/usr --buildtype=release \
+        -Dexperimental=true -Drfkill=enabled -Dtests=disabled -Dcava=disabled
+    meson compile -C build -j 2
+}
+
+check() {
+    python "$srcdir/test-close-race.py" "$srcdir/Waybar"
+}
+
+package() {
+    cd "$srcdir/Waybar"
+    DESTDIR="$pkgdir" meson install -C build --no-rebuild
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

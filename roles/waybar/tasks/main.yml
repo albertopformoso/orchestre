@@ -250,8 +250,8 @@
     mode: '0755'
 
 - name: Deploy waybar bar configuration
-  ansible.builtin.copy:
-    src: config
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/config"
     dest: "/home/{{ current_user }}/.config/waybar/config"
     owner: "{{ current_user }}"
     group: "{{ current_user }}"
@@ -274,6 +274,30 @@
     group: "{{ current_user }}"
     mode: '0644'
 
+- name: Deploy hover-scrolling media title source
+  ansible.builtin.copy:
+    src: media-title.c
+    dest: "{{ user_home }}/.config/waybar/media-title.c"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
+  register: media_title_source
+
+- name: Check for media title module
+  ansible.builtin.stat:
+    path: "{{ user_home }}/.config/waybar/media-title.so"
+  register: media_title_module
+
+- name: Build hover-scrolling media title module
+  ansible.builtin.shell: >-
+    cc -shared -fPIC -O2 -Wall -Wextra
+    {{ (user_home ~ '/.config/waybar/media-title.c') | quote }}
+    -o {{ (user_home ~ '/.config/waybar/media-title.so') | quote }}
+    $(pkg-config --cflags --libs gtk+-3.0 json-glib-1.0)
+  become: true
+  become_user: "{{ current_user }}"
+  when: media_title_source.changed or not media_title_module.stat.exists
+
 - name: Ensure user local bin directory exists
   ansible.builtin.file:
     path: "{{ user_home }}/.local/bin"
@@ -293,6 +317,24 @@
     - waybar-wifi-menu
     - waybar-power-menu
     - waybar-temp
+    - waybar-media
+    - trayscale-tray
+
+- name: Ensure user systemd directory exists
+  ansible.builtin.file:
+    path: "{{ user_home }}/.config/systemd/user"
+    state: directory
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0755'
+
+- name: Deploy Waybar media service
+  ansible.builtin.copy:
+    src: waybar-media.service
+    dest: "{{ user_home }}/.config/systemd/user/waybar-media.service"
+    owner: "{{ current_user }}"
+    group: "{{ current_user }}"
+    mode: '0644'
 
 - name: Ensure wlogout configuration directory exists
   ansible.builtin.file:
@@ -335,6 +377,16 @@
     owner: "{{ current_user }}"
     group: "{{ current_user }}"
     mode: '0755'
+
+- name: Allow user to apply CPU profile limits without sudo password
+  become: true
+  ansible.builtin.template:
+    src: waybar-cpu-profile.sudoers.j2
+    dest: /etc/sudoers.d/waybar-cpu-profile
+    owner: root
+    group: root
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
 
 - name: Deploy fan mode switcher script (MSI EC fan_mode/cooler_boost control)
   ansible.builtin.copy:

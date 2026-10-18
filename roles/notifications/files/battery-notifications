@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Send battery alerts once per user session, independently of monitor count."""
+
+import fcntl
+import json
+import logging
+import os
+from pathlib import Path
+import subprocess
+import time
+
+
+LOG = logging.getLogger("battery-notifications")
+
+
+def read_battery(root=Path("/sys/class/power_supply")):
+    """Return average system-battery capacity and whether it is on external power."""
+    batteries = []
+    online = False
+    for device in root.iterdir():
+        kind = (device / "type").read_text().strip()
+        if kind != "Battery":
+            if (device / "online").exists():
+                online |= (device / "online").read_text().strip() == "1"
+            continue
+        if (device / "scope").exists() and (device / "scope").read_text().strip() == "Device":
+            continue
+        if (device / "present").exists() and (device / "present").read_text().strip() == "0":
+            continue
+        status = (device / "status").read_text().strip()
+        capacity = int((device / "capacity").read_text())
+        if not 0 <= capacity <= 100 or status == "Unknown":
+            return None
+        batteries.append((capacity, status))
+    if not batteries:
+        return None
+    capacity = sum(cap for cap, _ in batteries) / len(batteries)
+    powered = online or all(status in {"Charging", "Full"} for _, status in batteries)
+    return capacity, powered
+
+
+def transition(state, capacity, powered):
+    """Plan at most one alert; hysteresis prevents threshold chatter."""
+    state = dict(state)
+    if capacity <= 95:
+        state["full"] = False
+    if powered or capacity > 33:
+        state["warning"] = False
+    if powered or capacity > 18:
+        state["critical"] = False
+
+    event = None
+    if powered and capacity >= 100 and not state.get("full"):
+        event = "full"
+        state["full"] = True
+    elif not powered and capacity <= 15 and not state.get("critical"):
+        event = "critical"
+        state["critical"] = True
+        state["warning"] = True  # Starting below 15% needs only the critical alert.
+    elif not powered and capacity <= 30 and not state.get("warning"):
+        event = "warning"
+        state["warning"] = True
+    return state, event
+
+
+def notify(event):
+    urgency, title, body = {
+        "warning": ("normal", "Low battery", "Battery at or below 30%"),
+        "critical": ("critical", "Very low battery", "Battery at or below 15%"),
+        "full": ("normal", "Battery full", "Plug can be removed"),
+    }[event]
+    command = ["notify-send", "-a", "Battery", "-u", urgency]
+    if event != "full":
+        command += ["-c", "device.battery.low"]
+    subprocess.run(command + [title, body], check=True, timeout=10)
+    LOG.info("Sent %s battery alert", event)
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    runtime = Path(os.environ["XDG_RUNTIME_DIR"]) / "battery-notifications"
+    runtime.mkdir(mode=0o700, exist_ok=True)
+    with (runtime / "lock").open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise SystemExit("battery-notifications is already running")
+        path = runtime / "state.json"
+        try:
+            state = json.loads(path.read_text())
+            if not isinstance(state, dict):
+                state = {}
+        except (FileNotFoundError, ValueError):
+            state = {}
+        while True:
+            try:
+                reading = read_battery()
+                if reading is not None:
+                    updated, event = transition(state, *reading)
+                    if event:
+                        notify(event)
+                    if updated != state:
+                        temporary = path.with_suffix(".tmp")
+                        temporary.write_text(json.dumps(updated) + "\n")
+                        temporary.replace(path)
+                        state = updated
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                LOG.warning("Battery check failed; retrying: %s", error)
+            time.sleep(15)
+
+
+if __name__ == "__main__":
+    main()

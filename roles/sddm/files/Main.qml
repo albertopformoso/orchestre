@@ -322,42 +322,47 @@ Rectangle {
                             smooth: true
                             visible: false
 
-                            property var fallbackExtensions: ["jpg", "jpeg", "png", "webp", "bmp"]
-                            property int fallbackIndex: 0
-                            property bool usingBundledDefault: false
-
-                            function tryNextFallback() {
-                                if (fallbackIndex >= fallbackExtensions.length) {
-                                    console.log("SDDM: No avatar file found with any known extension.");
-                                    return;
-                                }
-                                var ext = fallbackExtensions[fallbackIndex];
-                                fallbackIndex++;
-                                source = Qt.resolvedUrl("assets/avatar." + ext);
-                            }
-
-                            Component.onCompleted: {
-                                var s = "";
+                            property int candidateIndex: 0
+                            property var candidates: {
+                                var paths = [];
+                                var username = sddm.lastUser || "";
+                                var iconPath = "";
                                 if (typeof userModel !== "undefined" && userModel.count > 0) {
-                                    var icon = userModel.data(userModel.index(container.userIndex, 0), Qt.UserRole + 3);
-                                    if (icon && icon.toString().match(/\.(jpg|jpeg|png|bmp|webp|svg)$/i)) {
-                                        s = icon.toString();
-                                    }
+                                    var idx = userModel.index(container.userIndex, 0);
+                                    var name = userModel.data(idx, Qt.UserRole + 1);
+                                    var edit = userModel.data(idx, Qt.EditRole);
+                                    username = name ? name.toString() : (edit ? edit.toString() : "");
+                                    var icon = userModel.data(idx, Qt.UserRole + 3);
+                                    iconPath = icon ? icon.toString() : "";
                                 }
-                                if (s !== "") {
-                                    source = s;
-                                } else {
-                                    avatar.usingBundledDefault = true;
-                                    avatar.tryNextFallback();
-                                }
+                                if (config.syncedAvatar && config.syncedAvatarUser && username === config.syncedAvatarUser)
+                                    paths.push(config.syncedAvatar);
+                                if (iconPath !== "") paths.push(iconPath);
+                                var extensions = ["png", "jpg", "jpeg", "webp", "bmp"];
+                                for (var i = 0; i < extensions.length; i++)
+                                    paths.push(Qt.resolvedUrl("assets/avatar." + extensions[i]));
+                                return paths;
                             }
+                            function loadAvatar() {
+                                candidateIndex = 0;
+                                source = candidates[0] || "";
+                            }
+                            onCandidatesChanged: Qt.callLater(loadAvatar)
+                            Component.onCompleted: loadAvatar()
 
                             onStatusChanged: {
                                 if (status === Image.Ready) {
                                     console.log("SDDM: Image ready, repainting Canvas.");
                                     repaintTimer.start();
-                                } else if (status === Image.Error && avatar.usingBundledDefault) {
-                                    avatar.tryNextFallback();
+                                } else if (status === Image.Error && candidateIndex + 1 < candidates.length) {
+                                    // Missing local files can fail synchronously. Defer the
+                                    // next source assignment until this load has completed.
+                                    Qt.callLater(function() {
+                                        if (avatar.status === Image.Error && avatar.candidateIndex + 1 < avatar.candidates.length) {
+                                            avatar.candidateIndex++;
+                                            avatar.source = avatar.candidates[avatar.candidateIndex];
+                                        }
+                                    });
                                 }
                             }
                         }
