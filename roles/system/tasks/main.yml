@@ -74,6 +74,9 @@
       - gdk-pixbuf2
       - papirus-icon-theme
       # Waybar companions (from the waybar role)
+      - cpupower           # Per-profile CPU frequency ceilings
+      - playerctl          # MPRIS media controls and Python introspection bindings
+      - json-glib          # Native Waybar hover-scrolling media title
       - wlogout            # Fullscreen power menu
       - pavucontrol        # Floating volume mixer (opened by the volume module)
       - networkmanager     # Required by the Wi-Fi menu (nmcli) and the network module
@@ -106,11 +109,51 @@
       - nwg-look
       - gnome-themes-extra
       - hyprshot
-      - waybar-git
       - trayscale
     state: present
   become: true
   become_user: aur_builder
+
+- name: Read installed Waybar version
+  ansible.builtin.command: pacman -Q waybar-git
+  register: installed_waybar
+  changed_when: false
+  failed_when: installed_waybar.rc not in [0, 1]
+
+- name: Install Waybar with pending-window cleanup fix
+  when: installed_waybar.stdout != 'waybar-git 0.15.0.r1004.g6d60c8e-2'
+  block:
+    - name: Install Waybar build dependencies
+      ansible.builtin.package:
+        name:
+          - meson
+          - ninja
+          - scdoc
+          - wayland-protocols
+        state: present
+
+    - name: Deploy local Waybar package recipe and patch
+      ansible.builtin.copy:
+        src: waybar/
+        dest: /home/aur_builder/waybar-orchestre/
+        owner: aur_builder
+        group: wheel
+        mode: '0644'
+        directory_mode: '0755'
+
+    - name: Build patched Waybar package
+      ansible.builtin.command: makepkg --syncdeps --noconfirm --force
+      args:
+        chdir: /home/aur_builder/waybar-orchestre
+      become: true
+      become_user: aur_builder
+      environment:
+        PKGEXT: .pkg.tar.zst
+
+    - name: Install patched Waybar package
+      ansible.builtin.command: >-
+        pacman -U --noconfirm --needed
+        /home/aur_builder/waybar-orchestre/waybar-git-0.15.0.r1004.g6d60c8e-2-x86_64.pkg.tar.zst
 
 - name: Ensure msi-ec module loads at boot (MSI laptops only)
   # msi-ec-dkms-git ships this exact file, but the module has no DMI autoload
@@ -226,7 +269,7 @@
     group: "{{ current_user }}"
     mode: '0755'
 
-- name: Background script
+- name: Wallpaper and avatar scripts
   tags: sddm
   ansible.builtin.copy:
     src: scripts/{{ item }}.sh
@@ -236,6 +279,7 @@
     mode: '0755'
   loop:
     - setbg
+    - setavatar
 
 - name: Background script (keyboard backlight helper, MSI laptops only)
   ansible.builtin.copy:

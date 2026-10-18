@@ -13,13 +13,16 @@ PNG = b"\x89PNG\r\n\x1a\nexample payload"
 
 
 class BackgroundTests(unittest.TestCase):
+    helper = HELPER
+    destination_key = "BACKGROUND"
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.background = Path(self.directory.name) / "background.png"
         self.background.write_bytes(b"previous wallpaper")
-        self.publish = runpy.run_path(str(HELPER))["publish"]
-        self.publish.__globals__["BACKGROUND"] = self.background
+        self.publish = runpy.run_path(str(self.helper))["publish"]
+        self.publish.__globals__[self.destination_key] = self.background
 
     def test_publish_replaces_file_with_readable_copy(self):
         previous_inode = self.background.stat().st_ino
@@ -57,6 +60,11 @@ class BackgroundTests(unittest.TestCase):
         self.assertFalse(self.background.is_symlink())
         self.assertEqual(other.read_bytes(), b"do not overwrite")
         self.assertEqual(self.background.read_bytes(), PNG)
+
+
+class AvatarTests(BackgroundTests):
+    helper = HELPER.with_name("orchestre-sddm-avatar")
+    destination_key = "AVATAR"
 
 
 if __name__ == "__main__":

@@ -1,0 +1,47 @@
+#!/usr/bin/python3
+"""Publish an avatar from stdin to the fixed, system-wide SDDM location."""
+
+import os
+from pathlib import Path
+import sys
+import tempfile
+
+
+AVATAR = Path("/var/lib/orchestre/sddm/avatar.png")
+MAX_BYTES = 64 * 1024 * 1024
+
+
+def publish(stream):
+    # Decoding/conversion happens in setavatar as the desktop user, not as root.
+    data = stream.read(MAX_BYTES + 1)
+    if not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) > MAX_BYTES:
+        raise ValueError("expected a PNG avatar no larger than 64 MiB")
+
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=AVATAR.parent, prefix=".avatar-", delete=False) as output:
+            temporary = Path(output.name)
+            output.write(data)
+            output.flush()
+            os.fchmod(output.fileno(), 0o644)
+            os.fsync(output.fileno())
+        os.replace(temporary, AVATAR)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def main():
+    if len(sys.argv) != 1 or os.geteuid() != 0:
+        print("Run this helper as root, without arguments, with PNG data on stdin.", file=sys.stderr)
+        return 1
+    try:
+        publish(sys.stdin.buffer)
+    except (OSError, ValueError) as error:
+        print(f"SDDM avatar update failed: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

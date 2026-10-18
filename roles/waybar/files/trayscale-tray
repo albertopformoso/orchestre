@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Start Trayscale and repair its tray registration after Waybar reloads."""
+import subprocess
+import sys
+
+from gi.repository import Gio, GLib
+
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+watcher = "org.kde.StatusNotifierWatcher"
+
+
+def call(service, path, interface, method, args=None):
+    return bus.call_sync(service, path, interface, method, args, None,
+                         Gio.DBusCallFlags.NONE, 1000, None).unpack()
+
+
+def repair():
+    try:
+        items = call(watcher, "/StatusNotifierWatcher", "org.freedesktop.DBus.Properties",
+                     "Get", GLib.Variant("(ss)", (watcher, "RegisteredStatusNotifierItems")))[0]
+        names = call("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                     "org.freedesktop.DBus", "ListNames")[0]
+        for name in names:
+            if not name.startswith("org.freedesktop.StatusNotifierItem-"):
+                continue
+            owner = call("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                         "org.freedesktop.DBus", "GetNameOwner", GLib.Variant("(s)", (name,)))[0]
+            if any(item in (name + "/StatusNotifierItem", owner + "/StatusNotifierItem") for item in items):
+                continue
+            app = call(name, "/StatusNotifierItem", "org.freedesktop.DBus.Properties",
+                       "Get", GLib.Variant("(ss)", ("org.kde.StatusNotifierItem", "Id")))[0]
+            if app == "dev.deedles.Trayscale":
+                call(watcher, "/StatusNotifierWatcher", watcher, "RegisterStatusNotifierItem",
+                     GLib.Variant("(s)", (name,)))
+    except GLib.Error:
+        # The watcher or item can disappear while Waybar or Trayscale restarts.
+        pass
+    return GLib.SOURCE_CONTINUE
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--repair-once"]:
+        repair()
+    else:
+        subprocess.Popen(["trayscale", "--hide-window"])
+        Gio.bus_watch_name_on_connection(bus, watcher, Gio.BusNameWatcherFlags.NONE,
+                                         lambda *_: repair(), None)
+        # Also covers late item registration and an in-process Waybar reload.
+        GLib.timeout_add_seconds(5, repair)
+        GLib.MainLoop().run()

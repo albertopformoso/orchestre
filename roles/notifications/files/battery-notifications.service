@@ -1,0 +1,9 @@
+[Unit]
+Description=Send battery notifications once across all monitors
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/battery-notifications
+Restart=on-failure
+RestartSec=5

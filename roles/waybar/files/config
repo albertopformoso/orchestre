@@ -10,7 +10,7 @@
     "spacing": 4,
     "reload_style_on_change": true,
 
-    "modules-left": ["custom/power", "hyprland/workspaces"],
+    "modules-left": ["custom/power", "hyprland/workspaces", "group/media"],
     "modules-right": ["group/tray", "group/audio", "network", "bluetooth", "group/temps", "custom/power-profile", "custom/fan-mode", "battery", "clock"],
 
     // App icons per workspace; repeated icons show a window count.
@@ -38,7 +38,7 @@
         // Group by displayed icon: apps sharing an icon share its count.
         "window-rewrite-default": "●",
         "window-rewrite": {
-            "class<([Ff]irefox.*|org.mozilla.firefox|[Zz]en.*|app.zen_browser.zen)>": "󰈹",
+            "class<([Ff]irefox.*|org[.]mozilla[.]firefox|[Zz]en(-.*)?|app[.]zen_browser[.]zen)>": "󰈹",
             "class<([Cc]hromium.*|[Cc]hrome.*|[Gg]oogle-chrome.*|com.google.Chrome)>": "󰊯",
             "class<([Bb]rave.*|com.brave.Browser)>": "󰖟",
             "class<([Cc]ode.*|[Vv][Ss][Cc]odium.*|[Cc]odium.*|[Zz]ed.*|dev.zed.Zed.*|com.visualstudio.code.*|com.vscodium.codium.*|[Cc]ursor.*|[Ww]indsurf.*|jetbrains-.*|[Ii]dea.*|[Pp]ycharm.*|[Cc]lion.*|[Ww]eb[Ss]torm.*|[Gg]o[Ll]and.*|[Rr]ider.*|[Ee]clipse.*|[Nn]et[Bb]eans.*|[Aa]ndroid-studio.*|[Qq]tcreator.*)>": "󰨞",
@@ -52,7 +52,9 @@
             "class<([Dd]iscord.*|[Vv]esktop|dev.vencord.Vesktop|com.discordapp.Discord)>": "󰙯",
             "class<([Ss]potify|com.spotify.Client)>": "",
             "class<([Cc]arla([0-9]+)?(-.*)?)>": "󰓃",
-            "class<([Ss]team|steam_app_.*|com.valvesoftware.Steam)>": "",
+            "class<([Ss]team|com[.]valvesoftware[.]Steam)>": "",
+            "class<steam_app_.*>": "󰊗",
+            "class<([Ll]utris|net[.]lutris[.]Lutris)>": "󰸵",
             "class<([Vv]lc|org.videolan.VLC|[Mm]pv)>": "󰕼",
             "class<([Pp]avucontrol|org.pulseaudio.pavucontrol)>": "󰕾",
             "class<([Kk][Cc]alc|org.kde.kcalc)>": "",
@@ -65,12 +67,61 @@
         "sort-by": "id"
     },
 
+    // Hover the track to reveal transport controls before Artist — Track.
+    "group/media": {
+        "orientation": "inherit",
+        "modules": ["custom/media-bars", "group/media-controls", "custom/media-source"]
+    },
+    "group/media-controls": {
+        "orientation": "inherit",
+        "drawer": {
+            "transition-duration": 200,
+            "transition-left-to-right": false
+        },
+        "modules": ["cffi/media-title", "custom/media-previous", "custom/media-toggle", "custom/media-next"]
+    },
+    "custom/media-bars": {
+        "exec": "waybar-media watch bars",
+        "return-type": "json",
+        "restart-interval": 2
+    },
+    "custom/media-source": {
+        "exec": "waybar-media watch source",
+        "return-type": "json",
+        "restart-interval": 2
+    },
+    "cffi/media-title": {
+        "module_path": "{{ user_home }}/.config/waybar/media-title.so"
+    },
+    "custom/media-previous": {
+        "exec": "waybar-media watch previous",
+        "return-type": "json",
+        "restart-interval": 2,
+        "on-click": "waybar-media previous",
+        "exec-on-event": false
+    },
+    "custom/media-toggle": {
+        "exec": "waybar-media watch toggle",
+        "return-type": "json",
+        "restart-interval": 2,
+        "on-click": "waybar-media toggle",
+        "exec-on-event": false
+    },
+    "custom/media-next": {
+        "exec": "waybar-media watch next",
+        "return-type": "json",
+        "restart-interval": 2,
+        "on-click": "waybar-media next",
+        "exec-on-event": false
+    },
+
     // Hover the chevron to reveal background apps to its left.
     "group/tray": {
         "orientation": "inherit",
         "drawer": {
             "transition-duration": 200,
-            "transition-left-to-right": false
+            "transition-left-to-right": false,
+            "empty-if-drawer-empty": true
         },
         "modules": ["custom/tray-toggle", "tray"]
     },
@@ -80,7 +131,10 @@
     },
     "tray": {
         "icon-size": 14,
-        "spacing": 6
+        "spacing": 6,
+        "icons": {
+            "dev.deedles.Trayscale": "/usr/share/icons/hicolor/256x256/apps/dev.deedles.Trayscale.png"
+        }
     },
 
     // Hover the volume module to reveal a slider to its right.
@@ -219,19 +273,15 @@
             "default": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
             "charging": ["󰢟", "󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"]
         },
-        "tooltip-format": "{timeTo}\nCapacity: {capacity}%\nPower: {power:.1f} W",
-        "events": {
-            "on-discharging-warning": "notify-send -u normal -c device.battery.low 'Low battery' 'Battery below 30%'",
-            "on-discharging-critical": "notify-send -u critical -c device.battery.low 'Very low battery' 'Battery below 15%'",
-            "on-charging-100": "notify-send -u normal 'Battery full' 'Plug can be removed'"
-        }
+        // Alerts are sent once by battery-notifications.service, not per bar.
+        "tooltip-format": "{timeTo}\nCapacity: {capacity}%\nPower: {power:.1f} W"
     },
 
     // Click toggles between time and full date; hover shows month calendar
     "clock": {
         "interval": 60,
-        "format": "  {:%I:%M %p}",
-        "format-alt": "{:%a %d %b %I:%M %p}",
+        "format": "󰃰 {:%a %d %b %I:%M %p}",
+        "format-alt": " {:%I:%M %p}",
         "tooltip-format": "<tt><small>{calendar}</small></tt>",
         "calendar": {
             "mode": "month",
